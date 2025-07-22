@@ -1,0 +1,196 @@
+# Multi-table transfer configuration
+# Define multiple tables with their relationships and constraints
+
+tables:
+  # Parent table - no foreign keys
+  - source_table: "tempCase"
+    target_table: "TEMPCASES"
+    source_schema: "dbo"
+    custom_query: "mssql_read_cases_custom.sql"  # Use default query, or specify custom SQL file
+    batch_size: 1000
+    
+    # Primary key definition
+    primary_key: "ID"
+    
+    # Indexes to create
+    indexes:
+      # - name: "idx_id"
+      #   columns: ["ID"]
+      #   unique: true
+      - name: "idx_name"
+        columns: ["NAME"]
+        unique: false
+    
+    # No foreign keys for parent table
+    foreign_keys: []
+    
+  - source_table: "tempUsers"
+    target_table: "TEMPUSERS"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 1000
+    
+    # Primary key definition
+    primary_key: "ID"
+    
+    # Indexes to create
+    indexes: []
+    
+    # No foreign keys for parent table
+    foreign_keys: []
+    
+  - source_table: "tempCaseTempUsers"
+    target_table: "TEMPCASES_TEMPUSERS"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 1000
+    
+    # Primary key definition
+    primary_key: "ID"
+    
+    # Indexes to create
+    indexes: []
+    
+    # No foreign keys for parent table
+    foreign_keys: 
+      - name: "FK_TEMPCASES"
+        column: "TEMPCASEID"
+        referenced_table: "TEMPCASES"
+        referenced_column: "ID"
+      - name: "FK_TEMPUSERS"
+        column: "TEMPUSERID"
+        referenced_table: "TEMPUSERS"
+        referenced_column: "ID"
+
+  # # Child table with foreign key to CUSTOMERS
+  # - source_table: "ORDERS"
+  #   target_table: "ORDERS"
+  #   source_schema: "dbo"
+  #   custom_query: null
+  #   batch_size: 1000
+    
+  #   primary_key: "ORDER_ID"
+    
+  #   indexes:
+  #     - name: "idx_orders_customer"
+  #       columns: ["CUSTOMER_ID"]
+  #       unique: false
+  #     - name: "idx_orders_date"
+  #       columns: ["ORDER_DATE"]
+  #       unique: false
+    
+  #   # Foreign key relationships
+  #   foreign_keys:
+  #     - name: "fk_orders_customer"
+  #       column: "CUSTOMER_ID"
+  #       referenced_table: "CUSTOMERS"
+  #       referenced_column: "CUSTOMER_ID"
+
+  # # Another parent table
+  # - source_table: "PRODUCTS"
+  #   target_table: "PRODUCTS"
+  #   source_schema: "dbo"
+  #   custom_query: null
+  #   batch_size: 1000
+    
+  #   primary_key: "PRODUCT_ID"
+    
+  #   indexes:
+  #     - name: "idx_products_category"
+  #       columns: ["CATEGORY"]
+  #       unique: false
+  #     - name: "idx_products_name"
+  #       columns: ["PRODUCT_NAME"]
+  #       unique: false
+    
+  #   foreign_keys: []
+
+  # # Junction table with multiple foreign keys
+  # - source_table: "ORDER_ITEMS"
+  #   target_table: "ORDER_ITEMS"
+  #   source_schema: "dbo"
+  #   custom_query: null
+  #   batch_size: 1000
+    
+  #   primary_key: ["ORDER_ID", "PRODUCT_ID"]  # Composite primary key
+    
+  #   indexes:
+  #     - name: "idx_order_items_order"
+  #       columns: ["ORDER_ID"]
+  #       unique: false
+  #     - name: "idx_order_items_product"
+  #       columns: ["PRODUCT_ID"]
+  #       unique: false
+    
+  #   foreign_keys:
+  #     - name: "fk_order_items_order"
+  #       column: "ORDER_ID"
+  #       referenced_table: "ORDERS"
+  #       referenced_column: "ORDER_ID"
+  #     - name: "fk_order_items_product"
+  #       column: "PRODUCT_ID"
+  #       referenced_table: "PRODUCTS"
+  #       referenced_column: "PRODUCT_ID"
+
+  # # Table with custom query
+  # - source_table: "CASES"  # Original table name
+  #   target_table: "CASES"
+  #   source_schema: "dbo"
+  #   custom_query: "mssql_read_cases_custom.sql"  # Custom SQL file
+  #   batch_size: 500
+    
+  #   primary_key: "CASE_ID"
+    
+  #   indexes:
+  #     - name: "idx_cases_status"
+  #       columns: ["STATUS"]
+  #       unique: false
+  #     - name: "idx_cases_created_date"
+  #       columns: ["CREATED_DATE"]
+  #       unique: false
+    
+  #   foreign_keys:
+  #     - name: "fk_cases_customer"
+  #       column: "CUSTOMER_ID"
+  #       referenced_table: "CUSTOMERS"
+  #       referenced_column: "CUSTOMER_ID"
+
+  # # Complex table with multiple relationships
+  # - source_table: "CASE_ASSIGNMENTS"
+  #   target_table: "CASE_ASSIGNMENTS"
+  #   source_schema: "dbo"
+  #   custom_query: null
+  #   batch_size: 1000
+    
+  #   primary_key: "ASSIGNMENT_ID"
+    
+  #   indexes:
+  #     - name: "idx_assignments_case"
+  #       columns: ["CASE_ID"]
+  #       unique: false
+  #     - name: "idx_assignments_date"
+  #       columns: ["ASSIGNED_DATE"]
+  #       unique: false
+    
+  #   foreign_keys:
+  #     - name: "fk_assignments_case"
+  #       column: "CASE_ID"
+  #       referenced_table: "CASES"
+  #       referenced_column: "CASE_ID"
+
+# Global settings
+settings:
+  # Default batch size for all tables
+  default_batch_size: 1000
+  
+  # Enable/disable foreign key creation
+  create_foreign_keys: true
+  
+  # Enable/disable index creation
+  create_indexes: false
+  
+  # Drop and recreate tables
+  drop_existing_tables: true
+  
+  # Verify data after transfer
+  verify_transfers: true
