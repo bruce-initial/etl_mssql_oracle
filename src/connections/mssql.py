@@ -13,11 +13,17 @@ class MSSQLConnection(DatabaseConnection):
     
     def __init__(self, credentials: dict):
         super().__init__(credentials)
+        # Windows-compatible ODBC drivers with more fallbacks
         self.available_drivers = [
             "ODBC Driver 18 for SQL Server", 
             "ODBC Driver 17 for SQL Server",
+            "ODBC Driver 13 for SQL Server",
+            "ODBC Driver 11 for SQL Server",
             "SQL Server Native Client 11.0",
-            "SQL Server"
+            "SQL Server Native Client 10.0",
+            "SQL Server",
+            "SQLSRV",
+            "FreeTDS"
         ]
     
     def connect(self) -> None:
@@ -26,15 +32,23 @@ class MSSQLConnection(DatabaseConnection):
         
         for driver in self.available_drivers:
             try:
+                # Build connection string with Windows compatibility options
                 connection_string = (
                     f"DRIVER={{{driver}}};"
                     f"SERVER={self.credentials['host']},{self.credentials['port']};"
                     f"DATABASE={self.credentials['database']};"
                     f"UID={self.credentials['user']};"
                     f"PWD={self.credentials['password']};"
-                    "TrustServerCertificate=yes;"
-                    "Encrypt=yes;"
                 )
+                
+                # Add encryption options for newer drivers
+                if "18" in driver or "17" in driver:
+                    connection_string += "TrustServerCertificate=yes;Encrypt=yes;"
+                elif "13" in driver or "11" in driver:
+                    connection_string += "TrustServerCertificate=yes;Encrypt=optional;"
+                else:
+                    # For older drivers, minimal options
+                    connection_string += "Trusted_Connection=no;"
                 
                 self.connection = pyodbc.connect(connection_string)
                 self.cursor = self.connection.cursor()
