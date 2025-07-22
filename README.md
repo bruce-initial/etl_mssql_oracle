@@ -2,7 +2,7 @@
 
 ## Overview
 
-This enhanced system handles multiple source tables with complex relationships, using **PyODBC + Pandas + DuckDB** approach for SQL Server connectivity. The system has been completely **refactored with a modular architecture** for better maintainability, error handling, and extensibility.
+This enhanced system handles multiple source tables with complex relationships, using **pymssql + Pandas + DuckDB** approach for SQL Server connectivity. The system has been completely **refactored with a modular architecture** for better maintainability, error handling, and extensibility.
 
 ## 🔧 **Latest Updates (v2.0 - Refactored)**
 
@@ -24,7 +24,7 @@ This enhanced system handles multiple source tables with complex relationships, 
 - **CLI Interface**: Full command-line support with validation modes
 
 **Legacy System (v1.0 - Monolithic):**
-- **PyODBC** for SQL Server connectivity (instead of DuckDB nanodbc extension)
+- **pymssql** for SQL Server connectivity (pure Python, no ODBC drivers required)
 - **Pandas** as a data bridge between databases  
 - **DuckDB** for complex data processing and analysis
 - **python-oracledb** for Oracle database operations
@@ -35,7 +35,7 @@ The original nanodbc extension was causing HTTP 403 errors. This updated system 
 
 ### **Why This Approach Works Better:**
 1. **✅ No Extension Dependencies**: Doesn't rely on potentially unavailable DuckDB extensions
-2. **✅ Mature Libraries**: Uses well-established pyodbc and pandas libraries  
+2. **✅ Mature Libraries**: Uses well-established pymssql and pandas libraries  
 3. **✅ Better Error Handling**: More detailed error messages and troubleshooting
 4. **✅ Cross-Platform**: Works consistently across Linux distributions
 5. **✅ Performance**: Efficient data transfer using pandas DataFrames as demonstrated in recent approaches
@@ -73,7 +73,7 @@ project_root/
 ├── src/                              # 🆕 Modular source code
 │   ├── connections/                  # Database connection abstractions
 │   │   ├── base.py                   # Abstract base connection class
-│   │   ├── mssql.py                  # SQL Server connection with PyODBC
+│   │   ├── mssql.py                  # SQL Server connection with pymssql
 │   │   └── oracle.py                 # Oracle connection with python-oracledb
 │   ├── config/                       # Configuration management
 │   │   └── manager.py                # Configuration and credential management

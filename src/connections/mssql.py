@@ -1,4 +1,4 @@
-import pyodbc
+import pymssql
 import pandas as pd
 from typing import Any, List, Optional
 import logging
@@ -9,58 +9,30 @@ logger = logging.getLogger(__name__)
 
 
 class MSSQLConnection(DatabaseConnection):
-    """SQL Server database connection using PyODBC"""
+    """SQL Server database connection using pymssql"""
     
     def __init__(self, credentials: dict):
         super().__init__(credentials)
-        # Windows-compatible ODBC drivers with more fallbacks
-        self.available_drivers = [
-            "ODBC Driver 18 for SQL Server", 
-            "ODBC Driver 17 for SQL Server",
-            "ODBC Driver 13 for SQL Server",
-            "ODBC Driver 11 for SQL Server",
-            "SQL Server Native Client 11.0",
-            "SQL Server Native Client 10.0",
-            "SQL Server",
-            "SQLSRV",
-            "FreeTDS"
-        ]
     
     def connect(self) -> None:
         """Establish SQL Server connection"""
-        connection_string = None
-        
-        for driver in self.available_drivers:
-            try:
-                # Build connection string with Windows compatibility options
-                connection_string = (
-                    f"DRIVER={{{driver}}};"
-                    f"SERVER={self.credentials['host']},{self.credentials['port']};"
-                    f"DATABASE={self.credentials['database']};"
-                    f"UID={self.credentials['user']};"
-                    f"PWD={self.credentials['password']};"
-                )
-                
-                # Add encryption options for newer drivers
-                if "18" in driver or "17" in driver:
-                    connection_string += "TrustServerCertificate=yes;Encrypt=yes;"
-                elif "13" in driver or "11" in driver:
-                    connection_string += "TrustServerCertificate=yes;Encrypt=optional;"
-                else:
-                    # For older drivers, minimal options
-                    connection_string += "Trusted_Connection=no;"
-                
-                self.connection = pyodbc.connect(connection_string)
-                self.cursor = self.connection.cursor()
-                logger.info(f"SQL Server connected successfully using {driver}")
-                return
-                
-            except pyodbc.Error as e:
-                logger.warning(f"Failed to connect with {driver}: {e}")
-                continue
-        
-        if not self.connection:
-            raise ConnectionError("Failed to connect to SQL Server with any available driver")
+        try:
+            # pymssql connection - no drivers needed
+            self.connection = pymssql.connect(
+                server=self.credentials['host'],
+                port=self.credentials['port'],
+                user=self.credentials['user'],
+                password=self.credentials['password'],
+                database=self.credentials['database'],
+                timeout=30,
+                login_timeout=10
+            )
+            self.cursor = self.connection.cursor()
+            logger.info("SQL Server connected successfully using pymssql")
+            
+        except Exception as e:
+            logger.error(f"SQL Server connection failed: {e}")
+            raise ConnectionError(f"Failed to connect to SQL Server: {e}")
     
     def disconnect(self) -> None:
         """Close SQL Server connection"""
@@ -128,7 +100,7 @@ class MSSQLConnection(DatabaseConnection):
             NUMERIC_SCALE,
             IS_NULLABLE
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = ? AND TABLE_SCHEMA = ?
+        WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s
         ORDER BY ORDINAL_POSITION
         """
         
