@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import re
 from typing import List, Dict, Any, Tuple
 import logging
@@ -26,7 +26,7 @@ class DataTypeMapper:
         'NEXTVAL', 'CURRVAL', 'ROWNUM', 'ROWID', 'SYSDATE', 'SYSTIMESTAMP'
     }
     
-    # Data type mapping from pandas/SQL Server to Oracle
+    # Data type mapping from polars/SQL Server to Oracle
     TYPE_MAPPINGS = {
         'object': 'VARCHAR2',
         'string': 'VARCHAR2',
@@ -120,7 +120,7 @@ class DataTypeMapper:
         logger.warning(f"Unknown dtype '{dtype}', using VARCHAR2(4000)")
         return 'VARCHAR2(4000)'
     
-    def analyze_dataframe_columns(self, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+    def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Analyze DataFrame columns to determine appropriate Oracle types"""
         column_analysis = {}
         
@@ -131,15 +131,14 @@ class DataTypeMapper:
             
             # Calculate max length for string columns
             max_length = None
-            if df[col_name].dtype == 'object' or 'string' in str(df[col_name].dtype):
+            if df[col_name].dtype in [pl.Utf8, pl.String] or 'string' in str(df[col_name].dtype):
                 if len(df) > 0:
                     try:
-                        lengths = df[col_name].astype(str).str.len()
-                        max_length = lengths.max()
-                        if pd.isna(max_length):
+                        max_length_result = df.select(pl.col(col_name).cast(pl.Utf8).str.len_chars().max()).item()
+                        if max_length_result is None:
                             max_length = 255
                         else:
-                            max_length = int(max_length)
+                            max_length = int(max_length_result)
                     except Exception as e:
                         logger.warning(f"Error calculating max length for {col_name}: {e}")
                         max_length = 255
@@ -155,7 +154,7 @@ class DataTypeMapper:
                 'pandas_dtype': dtype,
                 'oracle_type': oracle_type,
                 'max_length': max_length,
-                'nullable': df[col_name].isnull().any()
+                'nullable': df[col_name].null_count() > 0
             }
         
         return column_analysis
@@ -189,17 +188,11 @@ class DataTypeMapper:
             
             for col_idx, val in enumerate(row):
                 try:
-                    if pd.isna(val) or val is None:
+                    if val is None:
                         processed_row.append(None)
-                    elif isinstance(val, (pd.Timestamp, pd.NaT.__class__)):
-                        # Convert pandas timestamps to Python datetime
-                        processed_row.append(val.to_pydatetime() if not pd.isna(val) else None)
                     elif isinstance(val, bool):
                         # Convert boolean to 1/0 for Oracle
                         processed_row.append(1 if val else 0)
-                    elif isinstance(val, (pd.Timedelta, pd.NaT.__class__)):
-                        # Convert timedelta to string representation
-                        processed_row.append(str(val) if not pd.isna(val) else None)
                     else:
                         processed_row.append(val)
                         

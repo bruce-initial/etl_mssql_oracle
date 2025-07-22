@@ -1,5 +1,5 @@
 import pyodbc
-import pandas as pd
+import polars as pl
 from typing import Any, List, Optional
 import logging
 
@@ -96,12 +96,30 @@ class MSSQLConnection(DatabaseConnection):
         if self.connection:
             self.connection.rollback()
     
-    def read_table_as_dataframe(self, query: str) -> pd.DataFrame:
-        """Read table data as pandas DataFrame"""
+    def read_table_as_dataframe(self, query: str) -> pl.DataFrame:
+        """Read table data as polars DataFrame"""
         if not self.connection:
             raise ConnectionError("No active connection")
         
-        return pd.read_sql(query, self.connection)
+        # Execute query and fetch data directly with pyodbc
+        self.execute(query)
+        rows = self.fetchall()
+        
+        # Get column names from cursor description
+        columns = [desc[0] for desc in self.cursor.description] if self.cursor.description else []
+        
+        # Convert to polars DataFrame directly
+        if not rows:
+            # Return empty DataFrame with correct column names
+            return pl.DataFrame({col: [] for col in columns})
+        
+        # Convert rows to dictionary format for polars
+        data_dict = {col: [] for col in columns}
+        for row in rows:
+            for i, col in enumerate(columns):
+                data_dict[col].append(row[i])
+        
+        return pl.DataFrame(data_dict)
     
     def get_table_schema(self, table_name: str, schema: str = "dbo") -> List[dict]:
         """Get table schema information"""

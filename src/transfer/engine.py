@@ -1,5 +1,5 @@
 import duckdb
-import pandas as pd
+import polars as pl
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import time
@@ -97,12 +97,20 @@ class TransferEngine:
         self.logger.debug(f"SQL Query: {query}")
         
         try:
-            # Read data using pandas
+            # Read data using polars
             df = self.mssql_conn.read_table_as_dataframe(query)
             
             # Register with DuckDB for potential processing
             temp_table_name = f"temp_{table_config['target_table'].lower()}"
-            self.duckdb_conn.register(temp_table_name, df)
+            # Register polars DataFrame with DuckDB using PyArrow
+            try:
+                # Convert polars to arrow table for DuckDB
+                arrow_table = df.to_arrow()
+                self.duckdb_conn.register(temp_table_name, arrow_table)
+            except Exception as e:
+                self.logger.warning(f"Could not register with DuckDB: {e}")
+                # DuckDB registration is optional, continue without it
+                temp_table_name = None
             
             duration = time.time() - start_time
             row_count = len(df)
@@ -121,8 +129,8 @@ class TransferEngine:
             
             return {
                 'dataframe': df,
-                'data': df.values.tolist(),
-                'columns': df.columns.tolist(),
+                'data': df.rows(),
+                'columns': df.columns,
                 'temp_table': temp_table_name,
                 'row_count': row_count
             }

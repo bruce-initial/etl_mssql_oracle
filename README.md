@@ -2,7 +2,7 @@
 
 ## Overview
 
-This enhanced system handles multiple source tables with complex relationships, using **PyODBC + Pandas + DuckDB** approach for SQL Server connectivity. The system has been completely **refactored with a modular architecture** for better maintainability, error handling, and extensibility.
+This enhanced system handles multiple source tables with complex relationships, using **PyODBC + Polars + DuckDB** approach for SQL Server connectivity. The system has been completely **refactored with a modular architecture** for better maintainability, error handling, and extensibility.
 
 ## 🔧 **Latest Updates (v2.0 - Refactored)**
 
@@ -12,7 +12,7 @@ This enhanced system handles multiple source tables with complex relationships, 
 - **✅ Enhanced error handling** - Custom exceptions and comprehensive logging with performance metrics
 - **✅ Command-line interface** - Full CLI with dry-run validation and configuration options
 - **✅ Dependency resolution** - Automatic topological sorting with circular dependency detection
-- **✅ Intelligent data mapping** - Advanced pandas-to-Oracle type conversion with column sanitization
+- **✅ Intelligent data mapping** - Advanced polars-to-Oracle type conversion with column sanitization
 
 ## ⚠️ Architecture Evolution
 
@@ -25,7 +25,7 @@ This enhanced system handles multiple source tables with complex relationships, 
 
 **Legacy System (v1.0 - Monolithic):**
 - **PyODBC** for SQL Server connectivity (instead of DuckDB nanodbc extension)
-- **Pandas** as a data bridge between databases  
+- **Polars** as a data bridge between databases  
 - **DuckDB** for complex data processing and analysis
 - **cx_Oracle** for Oracle database operations
 
