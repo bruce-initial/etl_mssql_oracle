@@ -1,4 +1,4 @@
-import cx_Oracle
+import oracledb
 from typing import Any, List, Optional
 import logging
 
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class OracleConnection(DatabaseConnection):
-    """Oracle database connection using cx_Oracle"""
+    """Oracle database connection using python-oracledb"""
     
     def __init__(self, credentials: dict):
         super().__init__(credentials)
@@ -16,23 +16,24 @@ class OracleConnection(DatabaseConnection):
     def connect(self) -> None:
         """Establish Oracle connection"""
         try:
-            dsn = cx_Oracle.makedsn(
+            # python-oracledb connection
+            dsn = oracledb.makedsn(
                 self.credentials['host'],
                 self.credentials['port'],
                 service_name=self.credentials['service']
             )
             
-            self.connection = cx_Oracle.connect(
-                self.credentials['user'],
-                self.credentials['password'],
-                dsn
+            self.connection = oracledb.connect(
+                user=self.credentials['user'],
+                password=self.credentials['password'],
+                dsn=dsn
             )
             self.cursor = self.connection.cursor()
             logger.info("Oracle connection established successfully")
             
         except Exception as e:
             logger.error(f"Oracle connection failed: {e}")
-            logger.info("Make sure Oracle Instant Client is installed and configured")
+            logger.info("Make sure Oracle client is available (python-oracledb can work in thin mode without Instant Client)")
             raise
     
     def disconnect(self) -> None:

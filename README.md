@@ -27,7 +27,7 @@ This enhanced system handles multiple source tables with complex relationships, 
 - **PyODBC** for SQL Server connectivity (instead of DuckDB nanodbc extension)
 - **Pandas** as a data bridge between databases  
 - **DuckDB** for complex data processing and analysis
-- **cx_Oracle** for Oracle database operations
+- **python-oracledb** for Oracle database operations
 
 ## 🔧 **Solution for EndeavourOS HTTP 403 Error**
 
@@ -51,7 +51,7 @@ Before using this system, you must install the appropriate ODBC drivers:
 - **Linux**: Follow Microsoft's instructions to install msodbcsql17
 
 **For Oracle (target database):**
-- This system uses cx_Oracle for writing to Oracle, which requires Oracle Instant Client
+- This system uses python-oracledb for writing to Oracle, which can work with or without Oracle Instant Client
 - Download and install Oracle Instant Client libraries
 - Set appropriate environment variables (LD_LIBRARY_PATH on Linux, PATH on Windows)
 
@@ -74,7 +74,7 @@ project_root/
 │   ├── connections/                  # Database connection abstractions
 │   │   ├── base.py                   # Abstract base connection class
 │   │   ├── mssql.py                  # SQL Server connection with PyODBC
-│   │   └── oracle.py                 # Oracle connection with cx_Oracle
+│   │   └── oracle.py                 # Oracle connection with python-oracledb
 │   ├── config/                       # Configuration management
 │   │   └── manager.py                # Configuration and credential management
 │   ├── mappers/                      # Data type mapping utilities
