@@ -23,7 +23,7 @@ class DataTypeMapper:
         'USING', 'NATURAL', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL',
         'OUTER', 'CROSS', 'COMMENT', 'CONSTRAINT', 'PRIMARY', 'KEY',
         'FOREIGN', 'REFERENCES', 'UNIQUE', 'CHECK', 'DEFAULT', 'SEQUENCE',
-        'NEXTVAL', 'CURRVAL', 'ROWNUM', 'ROWID', 'SYSDATE', 'SYSTIMESTAMP'
+        'NEXTVAL', 'CURRVAL', 'ROWNUM', 'ROWID', 'SYSDATE', 'SYSTIMESTAMP', 'DESC'
     }
     
     # Data type mapping from pandas/SQL Server to Oracle
