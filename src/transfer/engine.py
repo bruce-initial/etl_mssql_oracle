@@ -45,11 +45,13 @@ class TransferEngine:
             mssql_creds = self.config_manager.get_database_credentials('mssql')
             self.mssql_conn = MSSQLConnection(mssql_creds)
             self.mssql_conn.connect()
+            self.logger.info("MSSQL connection initialized")
             
             # Initialize Oracle connection
             oracle_creds = self.config_manager.get_database_credentials('oracle')
             self.oracle_conn = OracleConnection(oracle_creds)
             self.oracle_conn.connect()
+            self.logger.info("ORACLE connection initialized")
             
             self.logger.info("All database connections initialized successfully")
             
