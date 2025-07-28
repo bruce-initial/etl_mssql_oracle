@@ -183,6 +183,9 @@ class DataTypeMapper:
         """Process data values for Oracle insertion"""
         processed_data = []
         
+        # Extract column info for length validation
+        columns_info = list(column_analysis.values())
+        
         for row_idx, row in enumerate(data):
             processed_row = []
             
@@ -193,6 +196,23 @@ class DataTypeMapper:
                     elif isinstance(val, bool):
                         # Convert boolean to 1/0 for Oracle
                         processed_row.append(1 if val else 0)
+                    elif isinstance(val, str):
+                        # Check if column has length limit and truncate if necessary
+                        if col_idx < len(columns_info):
+                            col_info = columns_info[col_idx]
+                            oracle_type = col_info.get('oracle_type', '')
+                            
+                            # Extract VARCHAR2 length limit
+                            if 'VARCHAR2(' in oracle_type:
+                                import re
+                                length_match = re.search(r'VARCHAR2\((\d+)\)', oracle_type)
+                                if length_match:
+                                    max_length = int(length_match.group(1))
+                                    if len(val) > max_length:
+                                        logger.warning(f"Truncating string value from {len(val)} to {max_length} chars at row {row_idx}, col {col_idx}")
+                                        val = val[:max_length]
+                        
+                        processed_row.append(val)
                     else:
                         processed_row.append(val)
                         
