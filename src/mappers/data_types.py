@@ -82,43 +82,47 @@ class DataTypeMapper:
         return col_name
     
     def map_pandas_to_oracle_type(self, dtype: str, max_length: int = None) -> str:
-        """Map pandas dtype to Oracle data type"""
-        dtype_str = str(dtype).lower()
+        # """Map pandas dtype to Oracle data type"""
+        # dtype_str = str(dtype).lower()
         
-        # Handle string/object types with length calculation
-        if any(t in dtype_str for t in ['object', 'string']):
-            if max_length is None:
-                length = 4000
-            else:
-                # Add buffer and ensure within Oracle limits
-                length = min(max_length + 50, 4000)
-            return f"VARCHAR2({length})"
+        # # Handle string/object types with length calculation
+        # if any(t in dtype_str for t in ['object', 'string']):
+        #     if max_length is None:
+        #         length = 4000
+        #     else:
+        #         # Add buffer and ensure within Oracle limits
+        #         length = min(max_length + 50, 4000)
+        #     return f"VARCHAR2({length})"
         
-        # Handle numeric types
-        if any(t in dtype_str for t in ['int', 'integer']):
-            return 'NUMBER'
+        # # Handle numeric types
+        # if any(t in dtype_str for t in ['int', 'integer']):
+        #     return 'NUMBER'
         
-        if any(t in dtype_str for t in ['float', 'double']):
-            return 'NUMBER'
+        # if any(t in dtype_str for t in ['float', 'double']):
+        #     return 'NUMBER'
         
-        # Handle boolean
-        if 'bool' in dtype_str:
-            return 'NUMBER(1)'
+        # # Handle boolean
+        # if 'bool' in dtype_str:
+        #     return 'NUMBER(1)'
         
-        # Handle datetime
-        if 'datetime' in dtype_str:
-            return 'TIMESTAMP'
+        # # Handle datetime
+        # if 'datetime' in dtype_str:
+        #     return 'TIMESTAMP'
         
-        if 'date' in dtype_str:
-            return 'DATE'
+        # if 'date' in dtype_str:
+        #     return 'DATE'
         
-        # Handle timedelta
-        if 'timedelta' in dtype_str:
-            return 'INTERVAL DAY TO SECOND'
+        # # Handle timedelta
+        # if 'timedelta' in dtype_str:
+        #     return 'INTERVAL DAY TO SECOND'
         
-        # Default fallback
-        logger.warning(f"Unknown dtype '{dtype}', using VARCHAR2(4000)")
-        return 'VARCHAR2(4000)'
+        # # Default fallback
+        # logger.warning(f"Unknown dtype '{dtype}', using VARCHAR2(4000)")
+
+        # return 'VARCHAR2(4000)'
+
+        # Temporary handling: map all type to NVARCHAR2(1000)
+        return 'NVARCHAR2(1000)'
     
     def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Analyze DataFrame columns to determine appropriate Oracle types"""
@@ -161,7 +165,7 @@ class DataTypeMapper:
     
     def generate_oracle_column_definitions(self, column_analysis: Dict[str, Dict[str, Any]]) -> List[str]:
         """Generate Oracle column definitions from analysis"""
-        definitions = []
+        definitions = ["    UID RAW(16) DEFAULT sys_guid()"]
         
         for col_info in column_analysis.values():
             sanitized_name = col_info['sanitized_name']
