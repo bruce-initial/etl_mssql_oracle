@@ -165,7 +165,7 @@ class DataTypeMapper:
     
     def generate_oracle_column_definitions(self, column_analysis: Dict[str, Dict[str, Any]]) -> List[str]:
         """Generate Oracle column definitions from analysis"""
-        definitions = ["    UID RAW(16) DEFAULT sys_guid()"]
+        definitions = ["    U_ID RAW(16) DEFAULT sys_guid()"]
         
         for col_info in column_analysis.values():
             sanitized_name = col_info['sanitized_name']
