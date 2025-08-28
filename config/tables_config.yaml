@@ -4,7 +4,7 @@
 tables:
   # Parent table - no foreign keys
   - source_table: "ContractAdjustment"
-    target_table: "RLCIS_CONTRACTADJUSTMENT"
+    target_table: "TEST_RLCIS_CONTRACTADJUSTMENT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 1000
@@ -22,7 +22,7 @@ tables:
     foreign_keys: []
 
   - source_table: "ContractDLO"
-    target_table: "RLCIS_CONTRACTDLO"
+    target_table: "TEST_RLCIS_CONTRACTDLO"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 1000
@@ -40,7 +40,7 @@ tables:
     foreign_keys: []
 
   - source_table: "ContractHQ"
-    target_table: "RLCIS_CONTRACTHQ"
+    target_table: "TEST_RLCIS_CONTRACTHQ"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 1000
@@ -58,7 +58,7 @@ tables:
     foreign_keys: []
 
   - source_table: "ContractItemHQ"
-    target_table: "RLCIS_CONTRACTITEMHQ"
+    target_table: "TEST_RLCIS_CONTRACTITEMHQ"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 1000
@@ -76,7 +76,7 @@ tables:
     foreign_keys: []
 
   - source_table: "Contractor"
-    target_table: "RLCIS_CONTRACTOR"
+    target_table: "TEST_RLCIS_CONTRACTOR"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 1000
@@ -111,3 +111,24 @@ settings:
   
   # Verify data after transfer
   verify_transfers: true
+  
+  # Data quality check settings
+  data_quality_checks:
+    # Enable/disable data quality checks after transfer
+    enabled: true
+    
+    # Row count comparison - check if target has same number of rows as source
+    row_count_check: true
+    
+    # Column content comparison - sample and compare content between source and target
+    content_comparison:
+      enabled: true
+      # Percentage of rows to sample for content comparison (0.1 = 10%)
+      sample_percentage: 0.1
+      # Minimum number of rows to sample (regardless of percentage)
+      min_sample_size: 10
+      # Maximum number of rows to sample (to avoid excessive processing)
+      max_sample_size: 10000
+    
+    # Quality check results table name in Oracle
+    results_table_name: "DATA_QUALITY_CHECKING_RLCIS"

@@ -125,3 +125,30 @@ class OracleConnection(DatabaseConnection):
         except Exception as e:
             logger.error(f"Failed to create index: {e}")
             raise
+    
+    def execute_scalar(self, query: str, parameters: tuple = None) -> Any:
+        """Execute query and return single scalar value"""
+        self.execute(query, parameters)
+        result = self.fetchone()
+        return result[0] if result else None
+    
+    def execute_all(self, query: str, parameters: tuple = None) -> List[Any]:
+        """Execute query and return all results"""
+        self.execute(query, parameters)
+        return self.fetchall()
+    
+    def read_table_as_dataframe(self, query: str):
+        """Execute query and return results as polars DataFrame"""
+        import polars as pl
+        
+        self.execute(query)
+        rows = self.fetchall()
+        
+        if not rows:
+            return pl.DataFrame()
+        
+        # Get column names from cursor description
+        columns = [desc[0] for desc in self.cursor.description]
+        
+        # Create DataFrame
+        return pl.DataFrame(rows, schema=columns, orient="row")

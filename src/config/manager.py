@@ -76,6 +76,10 @@ class ConfigurationManager:
         """Get global settings"""
         return self.config.get('settings', {})
     
+    def get_full_config(self) -> Dict[str, Any]:
+        """Get complete configuration including settings"""
+        return self.config
+    
     def get_database_credentials(self, db_type: str) -> Dict[str, str]:
         """Get credentials for specific database type"""
         if db_type not in self.credentials:

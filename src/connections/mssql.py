@@ -165,3 +165,14 @@ class MSSQLConnection(DatabaseConnection):
             }
             for col in columns
         ]
+    
+    def execute_scalar(self, query: str, parameters: tuple = None) -> Any:
+        """Execute query and return single scalar value"""
+        self.execute(query, parameters)
+        result = self.fetchone()
+        return result[0] if result else None
+    
+    def execute_all(self, query: str, parameters: tuple = None) -> List[Any]:
+        """Execute query and return all results"""
+        self.execute(query, parameters)
+        return self.fetchall()

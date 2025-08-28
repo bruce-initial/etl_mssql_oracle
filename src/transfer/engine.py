@@ -10,6 +10,7 @@ from ..connections.oracle import OracleConnection
 from ..config.manager import ConfigurationManager
 from ..mappers.data_types import DataTypeMapper
 from ..dependency.resolver import DependencyResolver
+from ..quality.checker import DataQualityChecker
 from ..utils.logging import ETLLogger
 from ..utils.exceptions import TransferError, ValidationError, SQLError
 
@@ -26,6 +27,7 @@ class TransferEngine:
         self.oracle_conn: Optional[OracleConnection] = None
         self.duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None
         self.transferred_tables: Dict[str, Dict[str, Any]] = {}
+        self.quality_checker: Optional[DataQualityChecker] = None
         
         # Setup enhanced logging
         self.etl_logger = ETLLogger(
@@ -52,6 +54,13 @@ class TransferEngine:
             self.oracle_conn = OracleConnection(oracle_creds)
             self.oracle_conn.connect()
             self.logger.info("ORACLE connection initialized")
+            
+            # Initialize data quality checker
+            config_dict = self.config_manager.get_full_config()
+            self.quality_checker = DataQualityChecker(
+                self.mssql_conn, self.oracle_conn, config_dict, self.etl_logger
+            )
+            self.logger.info("Data quality checker initialized")
             
             self.logger.info("All database connections initialized successfully")
             
@@ -346,12 +355,38 @@ class TransferEngine:
             # Verify transfer
             success = self.verify_transfer(table_config, source_data['row_count'])
             
+            # Run data quality checks
+            quality_results = None
+            if success and self.quality_checker:
+                try:
+                    primary_key = table_config.get('primary_key')
+                    # Convert list to string if needed
+                    if isinstance(primary_key, list):
+                        primary_key = primary_key[0] if primary_key else None
+                    
+                    quality_results = self.quality_checker.run_quality_checks(
+                        source_table=table_config['source_table'],
+                        target_table=table_name,
+                        source_schema=table_config.get('source_schema', 'dbo'),
+                        primary_key=primary_key
+                    )
+                    
+                    # Update success based on quality check results
+                    if quality_results.get('overall_status') == 'FAILED':
+                        success = False
+                        self.logger.warning(f"Quality checks failed for {table_name}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Quality checks failed for {table_name}: {e}")
+                    # Don't fail the entire transfer if quality checks fail
+            
             # Store transfer info
             self.transferred_tables[table_name] = {
                 'config': table_config,
                 'success': success,
                 'row_count': source_data['row_count'],
-                'column_mapping': table_info['column_mapping']
+                'column_mapping': table_info['column_mapping'],
+                'quality_results': quality_results
             }
             
             return success
@@ -442,15 +477,22 @@ class TransferEngine:
             
             total_duration = time.time() - start_time
             
+            # Generate quality check summary
+            quality_summary = self._generate_quality_summary()
+            
             # Log final results
             self.logger.info(f"Transfer completed: {success_count}/{total_count} tables successful")
+            if quality_summary:
+                self.logger.info(f"Quality checks: {quality_summary['passed']}/{quality_summary['total']} passed")
+            
             self.etl_logger.log_performance_metric(
                 "Complete ETL process", 
                 total_duration,
                 {
                     'successful_tables': success_count,
                     'total_tables': total_count,
-                    'success_rate': (success_count / total_count) * 100 if total_count > 0 else 0
+                    'success_rate': (success_count / total_count) * 100 if total_count > 0 else 0,
+                    'quality_summary': quality_summary
                 }
             )
             
@@ -459,7 +501,8 @@ class TransferEngine:
                 'successful_tables': success_count,
                 'total_tables': total_count,
                 'duration': total_duration,
-                'transferred_tables': self.transferred_tables
+                'transferred_tables': self.transferred_tables,
+                'quality_summary': quality_summary
             }
             
         except Exception as e:
@@ -469,3 +512,38 @@ class TransferEngine:
             raise
         finally:
             self.close_connections()
+    
+    def _generate_quality_summary(self) -> Optional[Dict[str, Any]]:
+        """Generate summary of all quality check results"""
+        if not self.quality_checker:
+            return None
+        
+        quality_tables = [
+            table_info for table_info in self.transferred_tables.values() 
+            if table_info.get('quality_results')
+        ]
+        
+        if not quality_tables:
+            return None
+        
+        total_checks = len(quality_tables)
+        passed_checks = sum(
+            1 for table_info in quality_tables 
+            if table_info['quality_results'].get('overall_status') == 'PASSED'
+        )
+        warning_checks = sum(
+            1 for table_info in quality_tables 
+            if table_info['quality_results'].get('overall_status') == 'WARNING'
+        )
+        failed_checks = sum(
+            1 for table_info in quality_tables 
+            if table_info['quality_results'].get('overall_status') == 'FAILED'
+        )
+        
+        return {
+            'total': total_checks,
+            'passed': passed_checks,
+            'warning': warning_checks,
+            'failed': failed_checks,
+            'success_rate': (passed_checks / total_checks * 100) if total_checks > 0 else 0
+        }

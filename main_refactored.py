@@ -89,12 +89,29 @@ def main():
                 logger.info("ETL MIGRATION COMPLETED SUCCESSFULLY!")
                 logger.info(f"Transferred {result['successful_tables']}/{result['total_tables']} tables")
                 logger.info(f"Total duration: {result['duration']:.2f} seconds")
+                
+                # Log quality check summary
+                quality_summary = result.get('quality_summary')
+                if quality_summary:
+                    logger.info(f"Quality checks: {quality_summary['passed']}/{quality_summary['total']} passed "
+                               f"({quality_summary['success_rate']:.1f}% success rate)")
+                    if quality_summary['warning'] > 0:
+                        logger.warning(f"Quality warnings: {quality_summary['warning']} tables")
+                    if quality_summary['failed'] > 0:
+                        logger.warning(f"Quality failures: {quality_summary['failed']} tables")
+                
                 logger.info("="*80)
                 return 0
             else:
                 logger.error("="*80)
                 logger.error("ETL MIGRATION FAILED!")
                 logger.error(f"Only {result['successful_tables']}/{result['total_tables']} tables transferred successfully")
+                
+                # Log quality check summary for failed migration
+                quality_summary = result.get('quality_summary')
+                if quality_summary and quality_summary['total'] > 0:
+                    logger.error(f"Quality checks: {quality_summary['passed']}/{quality_summary['total']} passed")
+                
                 logger.error("="*80)
                 return 1
                 
