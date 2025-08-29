@@ -134,7 +134,7 @@ class MSSQLConnection(DatabaseConnection):
             for i, col in enumerate(columns):
                 data_dict[col].append(row[i])
         
-        return pl.DataFrame(data_dict)
+        return pl.DataFrame(data_dict, infer_schema_length=0)
     
     def get_table_schema(self, table_name: str, schema: str = "dbo") -> List[dict]:
         """Get table schema information"""

@@ -150,5 +150,5 @@ class OracleConnection(DatabaseConnection):
         # Get column names from cursor description
         columns = [desc[0] for desc in self.cursor.description]
         
-        # Create DataFrame
-        return pl.DataFrame(rows, schema=columns, orient="row")
+        # Create DataFrame with string schema to prevent type inference issues
+        return pl.DataFrame(rows, schema=columns, orient="row", infer_schema_length=0)
