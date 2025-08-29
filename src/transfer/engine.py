@@ -138,10 +138,22 @@ class TransferEngine:
                 {'rows_per_second': row_count / duration if duration > 0 else 0}
             )
             
+            # Convert date/datetime columns to appropriate string formats
+            datetime_fixed_df = df.with_columns([
+                pl.when(pl.col(col).dtype == pl.Date)
+                .then(pl.col(col).dt.strftime('%Y-%m-%d'))
+                .when(pl.col(col).dtype.is_temporal())
+                .then(pl.col(col).dt.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                .otherwise(pl.col(col))
+                .alias(col)
+                for col in df.columns
+                if df[col].dtype.is_temporal()
+            ])
+            
             return {
-                'dataframe': df,
-                'data': df.rows(),
-                'columns': df.columns,
+                'dataframe': datetime_fixed_df,
+                'data': datetime_fixed_df.rows(),
+                'columns': datetime_fixed_df.columns,
                 'temp_table': temp_table_name,
                 'row_count': row_count
             }
