@@ -139,16 +139,22 @@ class TransferEngine:
             )
             
             # Convert date/datetime columns to appropriate string formats
-            datetime_fixed_df = df.with_columns([
-                pl.when(pl.col(col).dtype == pl.Date)
-                .then(pl.col(col).dt.strftime('%Y-%m-%d'))
-                .when(pl.col(col).dtype.is_temporal())
-                .then(pl.col(col).dt.strftime('%Y-%m-%d %H:%M:%S.%f'))
-                .otherwise(pl.col(col))
-                .alias(col)
-                for col in df.columns
-                if df[col].dtype.is_temporal()
-            ])
+            datetime_cols = []
+            for col in df.columns:
+                if df[col].dtype.is_temporal():
+                    if df[col].dtype == pl.Date:
+                        datetime_cols.append(
+                            pl.col(col).dt.strftime('%Y-%m-%d').alias(col)
+                        )
+                    else:
+                        datetime_cols.append(
+                            pl.col(col).dt.strftime('%Y-%m-%d %H:%M:%S.%f').alias(col)
+                        )
+            
+            if datetime_cols:
+                datetime_fixed_df = df.with_columns(datetime_cols)
+            else:
+                datetime_fixed_df = df
             
             return {
                 'dataframe': datetime_fixed_df,
