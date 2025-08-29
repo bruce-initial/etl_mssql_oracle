@@ -73,7 +73,7 @@ class DataTypeMapper:
         
         # Handle Oracle reserved keywords
         if col_name in self.ORACLE_RESERVED_KEYWORDS:
-            col_name = f"{col_name}_COL"
+            col_name = f'"{col_name}"'
         
         # Limit length to 30 characters (Oracle limit)
         if len(col_name) > 30:
@@ -165,7 +165,7 @@ class DataTypeMapper:
     
     def generate_oracle_column_definitions(self, column_analysis: Dict[str, Dict[str, Any]]) -> List[str]:
         """Generate Oracle column definitions from analysis"""
-        definitions = ["    U_ID RAW(16) NOT NULL DEFAULT sys_guid()"]
+        definitions = ["    U_ID RAW(16) DEFAULT sys_guid() NOT NULL"]
         
         for col_info in column_analysis.values():
             sanitized_name = col_info['sanitized_name']
