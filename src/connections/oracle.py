@@ -150,5 +150,16 @@ class OracleConnection(DatabaseConnection):
         # Get column names from cursor description
         columns = [desc[0] for desc in self.cursor.description]
         
+        # Convert rows to handle binary data, then create DataFrame
+        processed_rows = []
+        for row in rows:
+            processed_row = []
+            for val in row:
+                # Convert binary data to hex string representation
+                if isinstance(val, bytes):
+                    val = val.hex().upper()
+                processed_row.append(val)
+            processed_rows.append(tuple(processed_row))
+        
         # Create DataFrame with string schema to prevent type inference issues
-        return pl.DataFrame(rows, schema=columns, orient="row", infer_schema_length=0)
+        return pl.DataFrame(processed_rows, schema=columns, orient="row", infer_schema_length=0)

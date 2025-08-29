@@ -128,11 +128,15 @@ class MSSQLConnection(DatabaseConnection):
             # Return empty DataFrame with correct column names
             return pl.DataFrame({col: [] for col in columns})
         
-        # Convert rows to dictionary format for polars
+        # Convert rows to dictionary format for polars, handling binary data
         data_dict = {col: [] for col in columns}
         for row in rows:
             for i, col in enumerate(columns):
-                data_dict[col].append(row[i])
+                val = row[i]
+                # Convert binary data to hex string representation
+                if isinstance(val, bytes):
+                    val = val.hex().upper()
+                data_dict[col].append(val)
         
         return pl.DataFrame(data_dict, infer_schema_length=0)
     
