@@ -76,8 +76,8 @@ class DataTypeMapper:
             col_name = f'"{col_name}"'
         
         # Limit length to 30 characters (Oracle limit)
-        if len(col_name) > 30:
-            col_name = col_name[:27] + str(hash(col_name))[-3:]
+        # if len(col_name) > 30:
+        #     col_name = col_name[:27] + str(hash(col_name))[-3:]
         
         return col_name
     
