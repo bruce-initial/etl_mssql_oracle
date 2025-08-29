@@ -250,13 +250,13 @@ class DataQualityChecker:
             target_col = target_cols[col_lower]
             
             try:
-                # Get column values from both dataframes
-                source_values = source_df[source_col].sort()
-                target_values = target_df[target_col].sort()
+                # Get column values from both dataframes and cast to string for comparison
+                source_values = source_df[source_col].cast(pl.String).sort()
+                target_values = target_df[target_col].cast(pl.String).sort()
                 
                 # Compare values (handling nulls and different lengths)
                 if len(source_values) == len(target_values):
-                    # Element-wise comparison using Polars
+                    # Element-wise comparison using Polars with string casting
                     # Handle nulls by checking both null or both equal
                     source_is_null = source_values.is_null()
                     target_is_null = target_values.is_null()
