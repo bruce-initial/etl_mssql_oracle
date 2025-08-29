@@ -250,9 +250,9 @@ class DataQualityChecker:
             target_col = target_cols[col_lower]
             
             try:
-                # Get column values from both dataframes and cast to string for comparison
-                source_values = source_df[source_col].cast(pl.String).sort()
-                target_values = target_df[target_col].cast(pl.String).sort()
+                # Get column values from both dataframes (already cast to strings)
+                source_values = source_df[source_col].sort()
+                target_values = target_df[target_col].sort()
                 
                 # Compare values (handling nulls and different lengths)
                 if len(source_values) == len(target_values):
@@ -334,6 +334,14 @@ class DataQualityChecker:
             source_df, target_df = self.get_random_sample(
                 source_table, target_table, source_schema, sample_size, primary_key
             )
+            
+            # Convert both dataframes to all strings to ensure schema consistency
+            source_df = source_df.with_columns([
+                pl.col(col).cast(pl.String) for col in source_df.columns
+            ])
+            target_df = target_df.with_columns([
+                pl.col(col).cast(pl.String) for col in target_df.columns
+            ])
             
             # Compare content
             comparison_result = self.compare_dataframe_content(source_df, target_df)
