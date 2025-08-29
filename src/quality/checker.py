@@ -163,14 +163,18 @@ class DataQualityChecker:
             where_clause = f"WHERE {primary_key} IN ('{pk_list}')"
             
         else:
-            # Use database-specific random sampling
-            if self.mssql_conn.driver_type == 'mssql':
-                # SQL Server TABLESAMPLE
-                sample_percent = min(100, (sample_size / self.get_table_count(source_table, source_schema)) * 100)
-                where_clause = f"TABLESAMPLE ({sample_percent} PERCENT)"
+            # Use SQL Server random sampling with TABLESAMPLE or ORDER BY NEWID()
+            table_count = self.get_table_count(source_table, source_schema)
+            if table_count > 0:
+                sample_percent = min(100, max(0.1, (sample_size / table_count) * 100))
+                # Use TABLESAMPLE for larger tables (more efficient)
+                if sample_percent < 50:
+                    where_clause = f"TABLESAMPLE ({sample_percent:.2f} PERCENT)"
+                else:
+                    # For smaller tables or high sample percentages, use ORDER BY NEWID()
+                    where_clause = f"ORDER BY NEWID() OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
             else:
-                # Fallback to OFFSET/FETCH with ORDER BY NEWID()
-                where_clause = f"ORDER BY NEWID() OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
+                where_clause = ""
         
         # Get source sample
         source_query = f"SELECT * FROM {source_schema}.{source_table} {where_clause}"
@@ -203,7 +207,8 @@ class DataQualityChecker:
                 'columns_checked': 0,
                 'columns_matched': 0,
                 'match_percentage': 0.0,
-                'details': 'No data to compare'
+                'details': 'No data to compare',
+                'mismatch_details': []
             }
         
         # Get common columns (case-insensitive)
@@ -211,12 +216,28 @@ class DataQualityChecker:
         target_cols = {col.lower(): col for col in target_df.columns}
         common_cols = set(source_cols.keys()).intersection(set(target_cols.keys()))
         
+        # Track additional columns in target that don't exist in source
+        target_only_cols = set(target_cols.keys()) - set(source_cols.keys())
+        source_only_cols = set(source_cols.keys()) - set(target_cols.keys())
+        
+        mismatch_details = []
+        
+        # Report additional columns
+        if target_only_cols:
+            target_only_names = [target_cols[col] for col in target_only_cols]
+            mismatch_details.append(f"Additional columns in target: {', '.join(target_only_names)}")
+        
+        if source_only_cols:
+            source_only_names = [source_cols[col] for col in source_only_cols]
+            mismatch_details.append(f"Missing columns in target: {', '.join(source_only_names)}")
+        
         if not common_cols:
             return {
                 'columns_checked': 0,
                 'columns_matched': 0,
                 'match_percentage': 0.0,
-                'details': 'No common columns found'
+                'details': 'No common columns found',
+                'mismatch_details': mismatch_details
             }
         
         columns_checked = len(common_cols)
@@ -229,19 +250,29 @@ class DataQualityChecker:
             target_col = target_cols[col_lower]
             
             try:
-                # Sort both dataframes for comparison
-                source_values = source_df.select(source_col).sort(source_col)
-                target_values = target_df.select(target_col).sort(target_col)
+                # Get column values from both dataframes
+                source_values = source_df[source_col].sort()
+                target_values = target_df[target_col].sort()
                 
-                # Compare values (handling nulls)
-                if source_values.shape == target_values.shape:
-                    # Element-wise comparison
-                    matches = (source_values == target_values).sum().item()
+                # Compare values (handling nulls and different lengths)
+                if len(source_values) == len(target_values):
+                    # Element-wise comparison using Polars
+                    # Handle nulls by checking both null or both equal
+                    source_is_null = source_values.is_null()
+                    target_is_null = target_values.is_null()
+                    both_null = source_is_null & target_is_null
+                    both_equal = (source_values == target_values).fill_null(False)
+                    
+                    matches = (both_null | both_equal).sum()
                     total = len(source_values)
                     match_rate = matches / total if total > 0 else 0
                     
                     if match_rate >= 0.95:  # 95% threshold for considering a column "matched"
                         columns_matched += 1
+                    else:
+                        # Record mismatch details for failed columns
+                        mismatched_count = total - matches
+                        mismatch_details.append(f"Column '{source_col}': {mismatched_count}/{total} values differ ({match_rate:.1%} match)")
                     
                     column_details[source_col] = {
                         'match_rate': match_rate,
@@ -249,6 +280,7 @@ class DataQualityChecker:
                         'total': total
                     }
                 else:
+                    mismatch_details.append(f"Column '{source_col}': Shape mismatch (source: {len(source_values)}, target: {len(target_values)})")
                     column_details[source_col] = {
                         'match_rate': 0.0,
                         'matches': 0,
@@ -258,6 +290,7 @@ class DataQualityChecker:
                     
             except Exception as e:
                 self.logger.warning(f"Error comparing column {source_col}: {e}")
+                mismatch_details.append(f"Column '{source_col}': Comparison error - {str(e)}")
                 column_details[source_col] = {
                     'match_rate': 0.0,
                     'error': str(e)
@@ -269,7 +302,8 @@ class DataQualityChecker:
             'columns_checked': columns_checked,
             'columns_matched': columns_matched,
             'match_percentage': match_percentage,
-            'column_details': column_details
+            'column_details': column_details,
+            'mismatch_details': mismatch_details
         }
     
     def check_content_comparison(self, source_table: str, target_table: str,
@@ -304,17 +338,31 @@ class DataQualityChecker:
             # Compare content
             comparison_result = self.compare_dataframe_content(source_df, target_df)
             
-            # Determine overall status
+            # Determine overall status and build detailed error message
             match_percentage = comparison_result['match_percentage']
+            mismatch_details = comparison_result.get('mismatch_details', [])
+            
             if match_percentage >= 95:
                 status = 'PASSED'
                 error_message = None
+                # Even for passed checks, include minor mismatches if any
+                if mismatch_details and any('Additional columns in target' in detail for detail in mismatch_details):
+                    target_only_details = [detail for detail in mismatch_details if 'Additional columns in target' in detail]
+                    error_message = '; '.join(target_only_details)
             elif match_percentage >= 80:
                 status = 'WARNING'
                 error_message = f"Content match below threshold: {match_percentage:.1f}%"
+                if mismatch_details:
+                    error_message += f" - {'; '.join(mismatch_details[:3])}"  # Limit to first 3 details
+                    if len(mismatch_details) > 3:
+                        error_message += f" (and {len(mismatch_details) - 3} more issues)"
             else:
                 status = 'FAILED'
                 error_message = f"Poor content match: {match_percentage:.1f}%"
+                if mismatch_details:
+                    error_message += f" - {'; '.join(mismatch_details[:5])}"  # Limit to first 5 details
+                    if len(mismatch_details) > 5:
+                        error_message += f" (and {len(mismatch_details) - 5} more issues)"
             
             duration = time.time() - start_time
             actual_sample_percentage = (len(source_df) / actual_count) if actual_count > 0 else 0
@@ -329,7 +377,8 @@ class DataQualityChecker:
                 'status': status,
                 'error_message': error_message,
                 'duration': duration,
-                'details': comparison_result.get('column_details', {})
+                'details': comparison_result.get('column_details', {}),
+                'mismatch_details': mismatch_details
             }
             
             self.logger.info(f"Content comparison - {source_table}: sampled={len(source_df)}, "
