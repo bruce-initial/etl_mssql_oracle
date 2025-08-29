@@ -184,7 +184,7 @@ class DataTypeMapper:
         }
     
     def process_data_for_oracle(self, data: List[Tuple], column_analysis: Dict[str, Dict[str, Any]]) -> List[Tuple]:
-        """Process data values for Oracle insertion"""
+        """Process data values for Oracle insertion - convert all values to strings for NVARCHAR2 columns"""
         processed_data = []
         
         # Extract column info for length validation
@@ -197,28 +197,26 @@ class DataTypeMapper:
                 try:
                     if val is None:
                         processed_row.append(None)
-                    elif isinstance(val, bool):
-                        # Convert boolean to 1/0 for Oracle
-                        processed_row.append(1 if val else 0)
-                    elif isinstance(val, str):
+                    else:
+                        # Convert all non-null values to strings since all target columns are NVARCHAR2(1000)
+                        str_val = str(val)
+                        
                         # Check if column has length limit and truncate if necessary
                         if col_idx < len(columns_info):
                             col_info = columns_info[col_idx]
                             oracle_type = col_info.get('oracle_type', '')
                             
-                            # Extract VARCHAR2 length limit
-                            if 'VARCHAR2(' in oracle_type:
+                            # Extract NVARCHAR2 length limit
+                            if 'NVARCHAR2(' in oracle_type:
                                 import re
-                                length_match = re.search(r'VARCHAR2\((\d+)\)', oracle_type)
+                                length_match = re.search(r'NVARCHAR2\((\d+)\)', oracle_type)
                                 if length_match:
                                     max_length = int(length_match.group(1))
-                                    if len(val) > max_length:
-                                        logger.warning(f"Truncating string value from {len(val)} to {max_length} chars at row {row_idx}, col {col_idx}")
-                                        val = val[:max_length]
+                                    if len(str_val) > max_length:
+                                        logger.warning(f"Truncating string value from {len(str_val)} to {max_length} chars at row {row_idx}, col {col_idx}")
+                                        str_val = str_val[:max_length]
                         
-                        processed_row.append(val)
-                    else:
-                        processed_row.append(val)
+                        processed_row.append(str_val)
                         
                 except Exception as e:
                     logger.error(f"Error processing row {row_idx}, column {col_idx}: {e}")
