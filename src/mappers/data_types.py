@@ -121,7 +121,8 @@ class DataTypeMapper:
 
         # return 'VARCHAR2(4000)'
 
-        # Temporary handling: map all type to NVARCHAR2(1000)
+        # Use NVARCHAR2 for proper Unicode/Chinese character support
+        # NVARCHAR2 uses AL16UTF16 encoding which handles Chinese characters correctly
         return 'NVARCHAR2(1000)'
     
     def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
@@ -208,21 +209,38 @@ class DataTypeMapper:
                         processed_row.append(None)
                     else:
                         # Convert all other non-null values to strings since all target columns are NVARCHAR2(1000)
-                        str_val = str(val)
+                        # Handle Unicode/Chinese characters properly
+                        if isinstance(val, bytes):
+                            # Try to decode bytes as UTF-8 first, then fall back to latin-1
+                            try:
+                                str_val = val.decode('utf-8')
+                            except UnicodeDecodeError:
+                                try:
+                                    str_val = val.decode('latin-1')
+                                except UnicodeDecodeError:
+                                    str_val = val.decode('utf-8', errors='replace')
+                        else:
+                            str_val = str(val)
+                            # Ensure Unicode characters are properly preserved
+                            if any(ord(char) > 127 for char in str_val):
+                                # Contains non-ASCII characters - ensure UTF-8 encoding
+                                str_val = str_val.encode('utf-8').decode('utf-8')
                         
                         # Check if column has length limit and truncate if necessary
                         if col_idx < len(columns_info):
                             col_info = columns_info[col_idx]
                             oracle_type = col_info.get('oracle_type', '')
                             
-                            # Extract NVARCHAR2 length limit
+                            # Extract NVARCHAR2 length limit - count Unicode characters, not bytes
                             if 'NVARCHAR2(' in oracle_type:
                                 import re
                                 length_match = re.search(r'NVARCHAR2\((\d+)\)', oracle_type)
                                 if length_match:
                                     max_length = int(length_match.group(1))
-                                    if len(str_val) > max_length:
-                                        logger.warning(f"Truncating string value from {len(str_val)} to {max_length} chars at row {row_idx}, col {col_idx}")
+                                    # Use len() for character count, not byte count for Unicode
+                                    char_count = len(str_val)
+                                    if char_count > max_length:
+                                        logger.warning(f"Truncating Unicode string from {char_count} to {max_length} chars at row {row_idx}, col {col_idx}")
                                         str_val = str_val[:max_length]
                         
                         processed_row.append(str_val)

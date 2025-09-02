@@ -28,7 +28,17 @@ class OracleConnection(DatabaseConnection):
                 password=self.credentials['password'],
                 dsn=dsn
             )
+            
+            # Set Oracle session to handle Unicode properly
             self.cursor = self.connection.cursor()
+            try:
+                # Set session character set to handle Chinese characters
+                self.cursor.execute("ALTER SESSION SET NLS_LANGUAGE = 'AMERICAN'")
+                self.cursor.execute("ALTER SESSION SET NLS_TERRITORY = 'AMERICA'") 
+                # Note: NLS_CHARACTERSET is database-level, cannot be changed in session
+            except Exception as e:
+                logger.warning(f"Could not set Oracle session encoding: {e}")
+                # Continue anyway as these might not be settable in session
             logger.info("Oracle connection established successfully")
             
         except Exception as e:

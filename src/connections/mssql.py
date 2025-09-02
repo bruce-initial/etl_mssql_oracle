@@ -44,12 +44,12 @@ class MSSQLConnection(DatabaseConnection):
                 
                 # Add encryption options for newer drivers
                 if "18" in driver or "17" in driver:
-                    connection_string += "TrustServerCertificate=yes;Encrypt=yes;"
+                    connection_string += "TrustServerCertificate=yes;Encrypt=yes;CharacterSet=UTF-8;"
                 elif "13" in driver or "11" in driver:
-                    connection_string += "TrustServerCertificate=yes;Encrypt=optional;"
+                    connection_string += "TrustServerCertificate=yes;Encrypt=optional;CharacterSet=UTF-8;"
                 else:
                     # For older drivers, minimal options
-                    connection_string += "Trusted_Connection=no;"
+                    connection_string += "Trusted_Connection=no;CharacterSet=UTF-8;"
                 
                 self.connection = pyodbc.connect(connection_string)
                 self.cursor = self.connection.cursor()
@@ -145,6 +145,11 @@ class MSSQLConnection(DatabaseConnection):
                         val = val.hex().upper()
                         data_dict[col].append(val)
                 else:
+                    # Ensure proper Unicode handling for strings
+                    if isinstance(val, str):
+                        # Normalize Unicode strings to handle Chinese characters consistently
+                        import unicodedata
+                        val = unicodedata.normalize('NFC', val)
                     data_dict[col].append(val)
         
         # Create explicit string schema for all columns
