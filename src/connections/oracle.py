@@ -161,5 +161,6 @@ class OracleConnection(DatabaseConnection):
                 processed_row.append(val)
             processed_rows.append(tuple(processed_row))
         
-        # Create DataFrame with string schema to prevent type inference issues
-        return pl.DataFrame(processed_rows, schema=columns, orient="row", infer_schema_length=0)
+        # Create DataFrame with explicit string schema to prevent type inference issues
+        string_schema = {col: pl.String for col in columns}
+        return pl.DataFrame(processed_rows, schema=string_schema, orient="row")

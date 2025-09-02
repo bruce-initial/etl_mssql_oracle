@@ -138,7 +138,9 @@ class MSSQLConnection(DatabaseConnection):
                     val = val.hex().upper()
                 data_dict[col].append(val)
         
-        return pl.DataFrame(data_dict, infer_schema_length=0)
+        # Create explicit string schema for all columns
+        string_schema = {col: pl.String for col in columns}
+        return pl.DataFrame(data_dict, schema=string_schema)
     
     def get_table_schema(self, table_name: str, schema: str = "dbo") -> List[dict]:
         """Get table schema information"""
