@@ -140,7 +140,7 @@ class MSSQLConnection(DatabaseConnection):
         
         # Create explicit string schema for all columns
         string_schema = {col: pl.String for col in columns}
-        return pl.DataFrame(data_dict, schema=string_schema)
+        return pl.DataFrame(data_dict, schema=string_schema, strict=False)
     
     def get_table_schema(self, table_name: str, schema: str = "dbo") -> List[dict]:
         """Get table schema information"""
