@@ -197,8 +197,17 @@ class DataTypeMapper:
                 try:
                     if val is None:
                         processed_row.append(None)
+                    elif val == "":
+                        # Empty strings remain as empty strings (not NULL)
+                        processed_row.append("")
+                    elif isinstance(val, str) and val.strip() == "":
+                        # Whitespace-only strings become empty strings
+                        processed_row.append("")
+                    elif str(val).lower() in ['null', 'none', '<null>']:
+                        # Handle various NULL representations as actual NULL
+                        processed_row.append(None)
                     else:
-                        # Convert all non-null values to strings since all target columns are NVARCHAR2(1000)
+                        # Convert all other non-null values to strings since all target columns are NVARCHAR2(1000)
                         str_val = str(val)
                         
                         # Check if column has length limit and truncate if necessary

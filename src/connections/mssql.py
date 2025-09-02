@@ -133,10 +133,19 @@ class MSSQLConnection(DatabaseConnection):
         for row in rows:
             for i, col in enumerate(columns):
                 val = row[i]
+                # Handle NULL values first
+                if val is None:
+                    data_dict[col].append(None)
                 # Convert binary data to hex string representation
-                if isinstance(val, bytes):
-                    val = val.hex().upper()
-                data_dict[col].append(val)
+                elif isinstance(val, bytes):
+                    if len(val) == 0:
+                        # Empty binary data becomes empty string, not NULL
+                        data_dict[col].append("")
+                    else:
+                        val = val.hex().upper()
+                        data_dict[col].append(val)
+                else:
+                    data_dict[col].append(val)
         
         # Create explicit string schema for all columns
         string_schema = {col: pl.String for col in columns}
