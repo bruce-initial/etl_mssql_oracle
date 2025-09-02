@@ -220,11 +220,32 @@ class DataTypeMapper:
                                 except UnicodeDecodeError:
                                     str_val = val.decode('utf-8', errors='replace')
                         else:
-                            str_val = str(val)
-                            # Ensure Unicode characters are properly preserved
-                            if any(ord(char) > 127 for char in str_val):
-                                # Contains non-ASCII characters - ensure UTF-8 encoding
-                                str_val = str_val.encode('utf-8').decode('utf-8')
+                            # Handle datetime objects with 3-digit millisecond precision
+                            if hasattr(val, 'strftime'):  # datetime, date, time objects
+                                try:
+                                    # Format with 3-digit millisecond precision: YYYY-MM-DD HH:MM:SS.fff
+                                    str_val = val.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # Remove last 3 microsecond digits
+                                except (AttributeError, ValueError):
+                                    str_val = str(val)
+                            else:
+                                str_val = str(val)
+                                # Check if this looks like a datetime string and ensure 3-digit precision
+                                if isinstance(val, str) and len(str_val) > 19:
+                                    import re
+                                    # Match datetime with microseconds: YYYY-MM-DD HH:MM:SS.ffffff
+                                    datetime_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d{6})'
+                                    match = re.match(datetime_pattern, str_val)
+                                    if match:
+                                        base_datetime = match.group(1)
+                                        microseconds = match.group(2)
+                                        # Take only first 3 digits for milliseconds
+                                        milliseconds = microseconds[:3]
+                                        str_val = f"{base_datetime}.{milliseconds}"
+                                
+                                # Ensure Unicode characters are properly preserved
+                                if any(ord(char) > 127 for char in str_val):
+                                    # Contains non-ASCII characters - ensure UTF-8 encoding
+                                    str_val = str_val.encode('utf-8').decode('utf-8')
                         
                         # Check if column has length limit and truncate if necessary
                         if col_idx < len(columns_info):

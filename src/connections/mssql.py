@@ -145,12 +145,19 @@ class MSSQLConnection(DatabaseConnection):
                         val = val.hex().upper()
                         data_dict[col].append(val)
                 else:
+                    # Handle datetime objects with 3-digit millisecond precision
+                    if hasattr(val, 'strftime'):  # datetime objects from pyodbc
+                        # Format datetime with 3-digit millisecond precision
+                        formatted_val = val.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                        data_dict[col].append(formatted_val)
                     # Ensure proper Unicode handling for strings
-                    if isinstance(val, str):
+                    elif isinstance(val, str):
                         # Normalize Unicode strings to handle Chinese characters consistently
                         import unicodedata
                         val = unicodedata.normalize('NFC', val)
-                    data_dict[col].append(val)
+                        data_dict[col].append(val)
+                    else:
+                        data_dict[col].append(val)
         
         # Create explicit string schema for all columns
         string_schema = {col: pl.String for col in columns}
