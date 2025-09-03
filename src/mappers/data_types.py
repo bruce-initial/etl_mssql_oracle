@@ -207,6 +207,12 @@ class DataTypeMapper:
                     elif str(val).lower() in ['null', 'none', '<null>']:
                         # Handle various NULL representations as actual NULL
                         processed_row.append(None)
+                    elif isinstance(val, bool):
+                        # Convert boolean to 1/0 for Oracle NUMBER(1) columns
+                        processed_row.append(1 if val else 0)
+                    elif str(val).lower() in ['true', 'false']:
+                        # Handle string representations of boolean values
+                        processed_row.append(1 if str(val).lower() == 'true' else 0)
                     else:
                         # Convert all other non-null values to strings since all target columns are NVARCHAR2(1000)
                         # Handle Unicode/Chinese characters properly
