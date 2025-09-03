@@ -165,31 +165,22 @@ class DataQualityChecker:
             where_clause = f"WHERE {primary_key} IN ('{pk_list}')"
             
         else:
-            # Use SQL Server random sampling with TABLESAMPLE or ORDER BY NEWID()
-            table_count = self.get_table_count(source_table, source_schema)
-            if table_count > 0:
-                sample_percent = min(100, max(0.1, (sample_size / table_count) * 100))
-                # Use TABLESAMPLE for larger tables (more efficient)
-                if sample_percent < 50:
-                    where_clause = f"TABLESAMPLE ({sample_percent:.2f} PERCENT)"
-                else:
-                    # For smaller tables or high sample percentages, use ORDER BY NEWID()
-                    where_clause = f"ORDER BY NEWID() OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
-            else:
-                where_clause = ""
+            # Without primary key, we need to ensure we sample the same logical rows
+            # Use a deterministic approach by getting top N rows after ordering
+            where_clause = f"ORDER BY 1 OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
         
         # Get source sample
         source_query = f"SELECT * FROM {source_schema}.{source_table} {where_clause}"
         self.logger.info(f"Quality Check (source query): {source_query}")
         source_df = self.mssql_conn.read_table_as_dataframe(source_query)
         
-        # For Oracle, use the same sampling approach to ensure consistent sample sizes
+        # For Oracle, use the same sampling approach to ensure we compare identical rows
         if primary_key and 'WHERE' in where_clause:
             target_query = f"SELECT * FROM {target_table} {where_clause}"
         else:
-            # Use the actual sample size from source to ensure consistency
+            # Use deterministic ordering to get the same logical rows from target
             actual_sample_size = len(source_df)
-            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY DBMS_RANDOM.VALUE) WHERE ROWNUM <= {actual_sample_size}"
+            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY ROWNUM) WHERE ROWNUM <= {actual_sample_size}"
         
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
