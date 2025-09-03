@@ -202,8 +202,8 @@ class DataTypeMapper:
                         # Empty strings remain as empty strings (not NULL)
                         processed_row.append("")
                     elif isinstance(val, str) and val.strip() == "":
-                        # Whitespace-only strings become empty strings
-                        processed_row.append("")
+                        # Preserve original whitespace-only strings as-is (don't strip them)
+                        processed_row.append(val)
                     elif str(val).lower() in ['null', 'none', '<null>']:
                         # Handle various NULL representations as actual NULL
                         processed_row.append(None)

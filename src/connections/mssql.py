@@ -142,7 +142,7 @@ class MSSQLConnection(DatabaseConnection):
                         # Empty binary data becomes empty string, not NULL
                         data_dict[col].append("")
                     else:
-                        val = val.hex().upper()
+                        val = val.hex()
                         data_dict[col].append(val)
                 else:
                     # Handle datetime objects with 3-digit millisecond precision

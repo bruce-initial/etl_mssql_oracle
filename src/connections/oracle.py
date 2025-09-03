@@ -167,7 +167,7 @@ class OracleConnection(DatabaseConnection):
             for val in row:
                 # Convert binary data to hex string representation
                 if isinstance(val, bytes):
-                    val = val.hex().upper()
+                    val = val.hex()
                 processed_row.append(val)
             processed_rows.append(tuple(processed_row))
         
