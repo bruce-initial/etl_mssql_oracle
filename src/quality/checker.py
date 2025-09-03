@@ -122,7 +122,7 @@ class DataQualityChecker:
         
         sample_percentage = content_config.get('sample_percentage', 0.1)
         min_sample = content_config.get('min_sample_size', 100)
-        max_sample = content_config.get('max_sample_size', 10000)
+        max_sample = content_config.get('max_sample_size', 1000000)
         
         # Calculate percentage-based sample
         percentage_sample = int(total_rows * sample_percentage)
@@ -366,9 +366,30 @@ class DataQualityChecker:
                     if match_rate >= 0.95:  # 95% threshold for considering a column "matched"
                         columns_matched += 1
                     else:
-                        # Record mismatch details for failed columns
+                        # Record detailed mismatch information for failed columns
                         mismatched_count = total - matches
-                        mismatch_details.append(f"Column '{source_col}': {mismatched_count}/{total} values differ ({match_rate:.1%} match)")
+                        
+                        # Get sample of mismatched values for detailed logging
+                        mismatch_mask = ~(both_null | both_equal)
+                        mismatched_indices = mismatch_mask.arg_true()
+                        
+                        # Limit to first 10 mismatches for detailed analysis
+                        sample_mismatches = []
+                        for idx in mismatched_indices[:10]:
+                            try:
+                                src_val = source_values[idx]
+                                tgt_val = target_values[idx]
+                                sample_mismatches.append(f"Row {idx}: '{src_val}' vs '{tgt_val}'")
+                            except Exception:
+                                continue
+                        
+                        detailed_info = f"Column '{source_col}': {mismatched_count}/{total} values differ ({match_rate:.1%} match)"
+                        if sample_mismatches:
+                            detailed_info += f" | Examples: {'; '.join(sample_mismatches[:5])}"
+                            if len(sample_mismatches) > 5:
+                                detailed_info += f" (and {len(sample_mismatches)-5} more)"
+                        
+                        mismatch_details.append(detailed_info)
                     
                     column_details[source_col] = {
                         'match_rate': match_rate,
@@ -456,16 +477,14 @@ class DataQualityChecker:
                 status = 'WARNING'
                 error_message = f"Content match below threshold: {match_percentage:.1f}%"
                 if mismatch_details:
-                    error_message += f" - {'; '.join(mismatch_details[:3])}"  # Limit to first 3 details
-                    if len(mismatch_details) > 3:
-                        error_message += f" (and {len(mismatch_details) - 3} more issues)"
+                    # Include ALL mismatch details for complete analysis
+                    error_message += f" | Details: {' | '.join(mismatch_details)}"
             else:
                 status = 'FAILED'
                 error_message = f"Poor content match: {match_percentage:.1f}%"
                 if mismatch_details:
-                    error_message += f" - {'; '.join(mismatch_details[:5])}"  # Limit to first 5 details
-                    if len(mismatch_details) > 5:
-                        error_message += f" (and {len(mismatch_details) - 5} more issues)"
+                    # Include ALL mismatch details for complete analysis
+                    error_message += f" | Details: {' | '.join(mismatch_details)}"
             
             duration = time.time() - start_time
             actual_sample_percentage = (len(source_df) / actual_count) if actual_count > 0 else 0
