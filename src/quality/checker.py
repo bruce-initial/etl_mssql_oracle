@@ -258,11 +258,15 @@ class DataQualityChecker:
             
             transformed_data.append(processed_row)
         
-        # Recreate DataFrame with transformed data
+        # Recreate DataFrame with transformed data using explicit string schema
         if transformed_data:
-            return pl.DataFrame(transformed_data, schema=df.columns, orient="row")
+            # Create explicit string schema for all columns
+            string_schema = {col: pl.String for col in df.columns}
+            return pl.DataFrame(transformed_data, schema=string_schema, orient="row")
         else:
-            return pl.DataFrame([], schema=df.columns)
+            # Return empty DataFrame with string schema
+            string_schema = {col: pl.String for col in df.columns}
+            return pl.DataFrame([], schema=string_schema)
     
     def get_table_count(self, table_name: str, schema: str = 'dbo') -> int:
         """Get total row count for sampling calculations"""
