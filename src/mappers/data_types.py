@@ -208,7 +208,7 @@ class DataTypeMapper:
                         # Handle various NULL representations as actual NULL
                         processed_row.append(None)
                     elif isinstance(val, bool):
-                        # Convert boolean to 1/0 for Oracle NUMBER(1) columns
+                        # Convert boolean to '1'/'0' strings for Oracle NUMBER(1) columns
                         processed_row.append('1' if val else '0')
                     elif str(val).lower() in ['true', 'false']:
                         # Handle string representations of boolean values
