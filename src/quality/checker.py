@@ -466,7 +466,7 @@ class DataQualityChecker:
                 datetime.now(),
                 result.get('source_count'),
                 result.get('target_count'),
-                1 if result.get('match', False) else 0,
+                '1' if result.get('match', False) else '0',
                 result.get('sample_size'),
                 result.get('sample_percentage'),
                 result.get('columns_checked'),
