@@ -121,9 +121,9 @@ class DataTypeMapper:
 
         # return 'VARCHAR2(4000)'
 
-        # Use VARCHAR2 to preserve trailing whitespace (Oracle behavior difference)
-        # VARCHAR2 preserves trailing spaces better than NVARCHAR2
-        return 'VARCHAR2(1500)'
+        # Use VARCHAR2 with increased size to preserve trailing whitespace and multi-line content
+        # VARCHAR2 preserves trailing spaces and line breaks better than NVARCHAR2
+        return 'VARCHAR2(4000)'
     
     def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Analyze DataFrame columns to determine appropriate Oracle types"""
@@ -248,10 +248,17 @@ class DataTypeMapper:
                                         milliseconds = microseconds[:3]
                                         str_val = f"{base_datetime}.{milliseconds}"
                                 
-                                # Ensure Unicode characters are properly preserved
+                                # Ensure Unicode characters and line breaks are properly preserved
                                 if any(ord(char) > 127 for char in str_val):
                                     # Contains non-ASCII characters - ensure UTF-8 encoding
                                     str_val = str_val.encode('utf-8').decode('utf-8')
+                                
+                                # Preserve Windows line breaks (\r\n) and other line break formats
+                                # No normalization of line breaks - keep original format
+                                # Explicitly preserve multi-line content
+                                if '\r\n' in str_val or '\n' in str_val or '\r' in str_val:
+                                    # This is multi-line content - ensure it's preserved as-is
+                                    pass  # Keep str_val unchanged to preserve line breaks
                         
                         # Check if column has length limit and truncate if necessary
                         if col_idx < len(columns_info):
@@ -267,7 +274,12 @@ class DataTypeMapper:
                                     # Use len() for character count, not byte count for Unicode
                                     char_count = len(str_val)
                                     if char_count > max_length:
-                                        logger.warning(f"Truncating Unicode string from {char_count} to {max_length} chars at row {row_idx}, col {col_idx}")
+                                        # For multi-line content, log details about what's being truncated
+                                        if '\r\n' in str_val or '\n' in str_val or '\r' in str_val:
+                                            line_count = str_val.count('\n') + str_val.count('\r\n') + 1
+                                            logger.warning(f"Truncating multi-line string ({line_count} lines) from {char_count} to {max_length} chars at row {row_idx}, col {col_idx}")
+                                        else:
+                                            logger.warning(f"Truncating string from {char_count} to {max_length} chars at row {row_idx}, col {col_idx}")
                                         str_val = str_val[:max_length]
                         
                         processed_row.append(str_val)

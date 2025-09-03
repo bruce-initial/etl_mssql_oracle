@@ -152,9 +152,11 @@ class MSSQLConnection(DatabaseConnection):
                         data_dict[col].append(formatted_val)
                     # Ensure proper Unicode handling for strings
                     elif isinstance(val, str):
-                        # Normalize Unicode strings to handle Chinese characters consistently
+                        # Preserve Windows line breaks and normalize Unicode characters
                         import unicodedata
+                        # Preserve original line breaks before normalization
                         val = unicodedata.normalize('NFC', val)
+                        # Ensure Windows line breaks (\r\n) are preserved as-is
                         data_dict[col].append(val)
                     else:
                         data_dict[col].append(val)
