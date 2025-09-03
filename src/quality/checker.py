@@ -211,9 +211,24 @@ class DataQualityChecker:
                 'mismatch_details': []
             }
         
-        # Get common columns (case-insensitive)
-        source_cols = {col.lower(): col for col in source_df.columns}
-        target_cols = {col.lower(): col for col in target_df.columns}
+        # Get common columns (case-insensitive) - ensure we don't lose duplicate case variations
+        source_cols = {}
+        target_cols = {}
+        
+        # Build mappings while preserving all case variations
+        for col in source_df.columns:
+            col_lower = col.lower()
+            if col_lower not in source_cols:
+                source_cols[col_lower] = []
+            source_cols[col_lower].append(col)
+        
+        for col in target_df.columns:
+            col_lower = col.lower()
+            if col_lower not in target_cols:
+                target_cols[col_lower] = []
+            target_cols[col_lower].append(col)
+        
+        # Find columns that exist in both (by lowercase name)
         common_cols = set(source_cols.keys()).intersection(set(target_cols.keys()))
         
         # Track additional columns in target that don't exist in source
@@ -224,11 +239,15 @@ class DataQualityChecker:
         
         # Report additional columns
         if target_only_cols:
-            target_only_names = [target_cols[col] for col in target_only_cols]
+            target_only_names = []
+            for col in target_only_cols:
+                target_only_names.extend(target_cols[col])
             mismatch_details.append(f"Additional columns in target: {', '.join(target_only_names)}")
         
         if source_only_cols:
-            source_only_names = [source_cols[col] for col in source_only_cols]
+            source_only_names = []
+            for col in source_only_cols:
+                source_only_names.extend(source_cols[col])
             mismatch_details.append(f"Missing columns in target: {', '.join(source_only_names)}")
         
         if not common_cols:
@@ -244,10 +263,20 @@ class DataQualityChecker:
         columns_matched = 0
         column_details = {}
         
-        # Compare each common column
+        # Compare each common column - handle case variations properly
         for col_lower in common_cols:
-            source_col = source_cols[col_lower]
-            target_col = target_cols[col_lower]
+            source_col_list = source_cols[col_lower]
+            target_col_list = target_cols[col_lower]
+            
+            # Check for case variations and report them
+            if len(source_col_list) > 1:
+                mismatch_details.append(f"Source has multiple case variations for '{col_lower}': {', '.join(source_col_list)}")
+            if len(target_col_list) > 1:
+                mismatch_details.append(f"Target has multiple case variations for '{col_lower}': {', '.join(target_col_list)}")
+            
+            # Use the first column name from each list for comparison
+            source_col = source_col_list[0]
+            target_col = target_col_list[0]
             
             try:
                 # Get column values from both dataframes (already cast to strings)
