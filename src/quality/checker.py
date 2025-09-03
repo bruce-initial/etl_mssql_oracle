@@ -12,6 +12,7 @@ import polars as pl
 
 from ..connections.mssql import MSSQLConnection
 from ..connections.oracle import OracleConnection
+from ..mappers.data_types import DataTypeMapper
 from ..utils.exceptions import ValidationError, SQLError
 from ..utils.logging import ETLLogger
 
@@ -28,6 +29,7 @@ class DataQualityChecker:
         self.config = config
         self.etl_logger = etl_logger
         self.logger = logger
+        self.data_mapper = DataTypeMapper()
         
         # Extract quality check configuration
         self.quality_config = config.get('data_quality_checks', {})
@@ -192,6 +194,75 @@ class DataQualityChecker:
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
 
         return source_df, target_df
+    
+    def _apply_etl_transformations_to_dataframe(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Apply the same data transformations that are used during ETL process"""
+        
+        # Convert all columns to string first
+        string_df = df.with_columns([
+            pl.col(col).cast(pl.String) for col in df.columns
+        ])
+        
+        # Apply ETL transformations row by row to match the process_data_for_oracle logic
+        transformed_data = []
+        
+        for row in string_df.rows():
+            processed_row = []
+            
+            for val in row:
+                # Apply the same logic as in DataTypeMapper.process_data_for_oracle
+                if val is None:
+                    processed_row.append(None)
+                elif val == "":
+                    processed_row.append("")
+                elif isinstance(val, str) and val.strip() == "":
+                    # Preserve original whitespace as-is (matches our fix)
+                    processed_row.append(val)
+                elif str(val).lower() in ['null', 'none', '<null>']:
+                    processed_row.append(None)
+                elif isinstance(val, bool):
+                    processed_row.append('1' if val else '0')
+                elif str(val).lower() in ['true', 'false']:
+                    processed_row.append('1' if str(val).lower() == 'true' else '0')
+                else:
+                    # For string values, apply the same transformations as ETL
+                    if isinstance(val, bytes):
+                        try:
+                            str_val = val.decode('utf-8')
+                        except UnicodeDecodeError:
+                            try:
+                                str_val = val.decode('latin-1')
+                            except UnicodeDecodeError:
+                                str_val = val.decode('utf-8', errors='replace')
+                    else:
+                        # Handle datetime formatting with 3-digit precision
+                        if hasattr(val, 'strftime'):
+                            try:
+                                str_val = val.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                            except (AttributeError, ValueError):
+                                str_val = str(val)
+                        else:
+                            str_val = str(val)
+                            # Apply datetime string formatting if needed
+                            if isinstance(val, str) and len(str_val) > 19:
+                                import re
+                                datetime_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d{6})'
+                                match = re.match(datetime_pattern, str_val)
+                                if match:
+                                    base_datetime = match.group(1)
+                                    microseconds = match.group(2)
+                                    milliseconds = microseconds[:3]
+                                    str_val = f"{base_datetime}.{milliseconds}"
+                    
+                    processed_row.append(str_val)
+            
+            transformed_data.append(processed_row)
+        
+        # Recreate DataFrame with transformed data
+        if transformed_data:
+            return pl.DataFrame(transformed_data, schema=df.columns, orient="row")
+        else:
+            return pl.DataFrame([], schema=df.columns)
     
     def get_table_count(self, table_name: str, schema: str = 'dbo') -> int:
         """Get total row count for sampling calculations"""
@@ -365,9 +436,8 @@ class DataQualityChecker:
             )
             
             # Convert both dataframes to all strings to ensure schema consistency
-            source_df = source_df.with_columns([
-                pl.col(col).cast(pl.String) for col in source_df.columns
-            ])
+            # Apply the same data transformations to source data that are applied during ETL
+            source_df = self._apply_etl_transformations_to_dataframe(source_df)
             target_df = target_df.with_columns([
                 pl.col(col).cast(pl.String) for col in target_df.columns
             ])
