@@ -123,7 +123,7 @@ class DataTypeMapper:
 
         # Use VARCHAR2 to preserve trailing whitespace (Oracle behavior difference)
         # VARCHAR2 preserves trailing spaces better than NVARCHAR2
-        return 'VARCHAR2(1000)'
+        return 'VARCHAR2(1500)'
     
     def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Analyze DataFrame columns to determine appropriate Oracle types"""

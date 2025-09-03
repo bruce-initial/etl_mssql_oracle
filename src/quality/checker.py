@@ -183,14 +183,15 @@ class DataQualityChecker:
         self.logger.info(f"Quality Check (source query): {source_query}")
         source_df = self.mssql_conn.read_table_as_dataframe(source_query)
         
-        # For Oracle, use SAMPLE or ROWNUM
+        # For Oracle, use the same sampling approach to ensure consistent sample sizes
         if primary_key and 'WHERE' in where_clause:
             target_query = f"SELECT * FROM {target_table} {where_clause}"
         else:
-            # Oracle random sampling
-            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY DBMS_RANDOM.VALUE) WHERE ROWNUM <= {sample_size}"
+            # Use the actual sample size from source to ensure consistency
+            actual_sample_size = len(source_df)
+            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY DBMS_RANDOM.VALUE) WHERE ROWNUM <= {actual_sample_size}"
         
-        self.logger.info(f"Quality Check (source query): {target_query}")
+        self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
 
         return source_df, target_df
