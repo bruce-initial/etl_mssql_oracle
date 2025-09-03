@@ -121,9 +121,9 @@ class DataTypeMapper:
 
         # return 'VARCHAR2(4000)'
 
-        # Use NVARCHAR2 for proper Unicode/Chinese character support
-        # NVARCHAR2 uses AL16UTF16 encoding which handles Chinese characters correctly
-        return 'NVARCHAR2(1000)'
+        # Use VARCHAR2 to preserve trailing whitespace (Oracle behavior difference)
+        # VARCHAR2 preserves trailing spaces better than NVARCHAR2
+        return 'VARCHAR2(1000)'
     
     def analyze_dataframe_columns(self, df: pl.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Analyze DataFrame columns to determine appropriate Oracle types"""
@@ -214,7 +214,7 @@ class DataTypeMapper:
                         # Handle string representations of boolean values
                         processed_row.append('1' if str(val).lower() == 'true' else '0')
                     else:
-                        # Convert all other non-null values to strings since all target columns are NVARCHAR2(1000)
+                        # Convert all other non-null values to strings since all target columns are VARCHAR2(1000)
                         # Handle Unicode/Chinese characters properly
                         if isinstance(val, bytes):
                             # Try to decode bytes as UTF-8 first, then fall back to latin-1
@@ -258,10 +258,10 @@ class DataTypeMapper:
                             col_info = columns_info[col_idx]
                             oracle_type = col_info.get('oracle_type', '')
                             
-                            # Extract NVARCHAR2 length limit - count Unicode characters, not bytes
-                            if 'NVARCHAR2(' in oracle_type:
+                            # Extract VARCHAR2 length limit - count characters, not bytes
+                            if 'VARCHAR2(' in oracle_type:
                                 import re
-                                length_match = re.search(r'NVARCHAR2\((\d+)\)', oracle_type)
+                                length_match = re.search(r'VARCHAR2\((\d+)\)', oracle_type)
                                 if length_match:
                                     max_length = int(length_match.group(1))
                                     # Use len() for character count, not byte count for Unicode
