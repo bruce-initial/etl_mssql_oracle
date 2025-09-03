@@ -120,8 +120,9 @@ class MSSQLConnection(DatabaseConnection):
         self.execute(query)
         rows = self.fetchall()
         
-        # Get column names from cursor description
+        # Get column names and types from cursor description
         columns = [desc[0] for desc in self.cursor.description] if self.cursor.description else []
+        column_types = [desc[1] for desc in self.cursor.description] if self.cursor.description else []
         
         # Convert to polars DataFrame directly
         if not rows:
@@ -152,6 +153,14 @@ class MSSQLConnection(DatabaseConnection):
                         data_dict[col].append(formatted_val)
                     # Ensure proper Unicode handling for strings
                     elif isinstance(val, str):
+                        # Detect and trim CHAR field padding for numeric-looking strings
+                        # If string looks like pure numeric/alphanumeric ID with trailing spaces, trim them
+                        if val.endswith(' ') and len(val.strip()) > 0:
+                            trimmed_val = val.strip()
+                            # Only trim if it looks like an ID/code (alphanumeric without spaces in content)
+                            if trimmed_val.replace('/', '').replace('-', '').replace('_', '').isalnum():
+                                val = trimmed_val
+                        
                         # Preserve Windows line breaks and normalize Unicode characters
                         import unicodedata
                         # Preserve original line breaks before normalization
