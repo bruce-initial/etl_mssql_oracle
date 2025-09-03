@@ -166,7 +166,7 @@ class DataQualityChecker:
             
         else:
             # Without primary key, we need to ensure we sample the same logical rows
-            # Use a deterministic approach by getting top N rows after ordering
+            # Use deterministic approach by ordering by first column consistently
             where_clause = f"ORDER BY 1 OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
         
         # Get source sample
@@ -178,12 +178,20 @@ class DataQualityChecker:
         if primary_key and 'WHERE' in where_clause:
             target_query = f"SELECT * FROM {target_table} {where_clause}"
         else:
-            # Use deterministic ordering to get the same logical rows from target
+            # Use the same deterministic ordering by first column for target
             actual_sample_size = len(source_df)
-            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY ROWNUM) WHERE ROWNUM <= {actual_sample_size}"
+            # Oracle equivalent: ORDER BY first column, limit rows
+            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY 1) WHERE ROWNUM <= {actual_sample_size}"
         
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
+
+        # Ensure both DataFrames are sorted by first column to guarantee row alignment
+        if len(source_df) > 0 and len(target_df) > 0:
+            first_col_source = source_df.columns[0]
+            first_col_target = target_df.columns[0]
+            source_df = source_df.sort(first_col_source)
+            target_df = target_df.sort(first_col_target)
 
         return source_df, target_df
     
