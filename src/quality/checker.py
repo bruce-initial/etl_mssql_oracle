@@ -214,10 +214,11 @@ class DataQualityChecker:
                 if val is None:
                     processed_row.append(None)
                 elif val == "":
-                    processed_row.append("")
+                    # Treat empty string as NULL for quality checking
+                    processed_row.append(None)
                 elif isinstance(val, str) and val.strip() == "":
-                    # Preserve original whitespace as-is (matches our fix)
-                    processed_row.append(val)
+                    # Treat whitespace-only strings as NULL for quality checking
+                    processed_row.append(None)
                 elif str(val).lower() in ['null', 'none', '<null>']:
                     processed_row.append(None)
                 elif isinstance(val, bool):
