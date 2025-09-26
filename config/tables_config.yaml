@@ -7,17 +7,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTADJUSTMENT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -25,17 +25,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTDLO"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -43,17 +43,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTHQ"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -61,17 +61,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTITEMHQ"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -79,17 +79,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTOR"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 ################################################################################# 5
@@ -97,17 +97,17 @@ tables:
     target_table: "TEST_RLCIS_CONTRACTTYPE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
       - name: S
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -115,17 +115,17 @@ tables:
     target_table: "TEST_RLCIS_DEPARTMENT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -133,17 +133,17 @@ tables:
     target_table: "TEST_RLCIS_DISTRICT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -151,17 +151,17 @@ tables:
     target_table: "TEST_RLCIS_INACCESSIBILITY"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -169,17 +169,17 @@ tables:
     target_table: "TEST_RLCIS_ITEMUNIT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -188,17 +188,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCRTLCASE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -206,17 +206,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCRTLLINK"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -224,17 +224,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRL_REASON_NOPROS"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -242,17 +242,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLARISEN"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -260,17 +260,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLCOMPL"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -279,17 +279,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLDEPT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -297,17 +297,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLNATURE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -315,17 +315,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLREFERRALDEPT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -333,17 +333,17 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLREFERREDFROM"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -351,37 +351,37 @@ tables:
     target_table: "TEST_RLCIS_LANDCTRLSTRUC"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
-    
+
 ################################################################################# 20
   - source_table: "LandType"
     target_table: "TEST_RLCIS_LANDTYPE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -389,17 +389,17 @@ tables:
     target_table: "TEST_RLCIS_OFFENCESECTION"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -407,17 +407,17 @@ tables:
     target_table: "TEST_RLCIS_OFFICE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -425,17 +425,17 @@ tables:
     target_table: "TEST_RLCIS_OFFICE_DISTRICT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -443,37 +443,37 @@ tables:
     target_table: "TEST_RLCIS_PROSCAUTION"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
-    
+
 ################################################################################# 25
   - source_table: "Prosecution"
     target_table: "TEST_RLCIS_PROSECUTION"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -481,17 +481,17 @@ tables:
     target_table: "TEST_RLCIS_PROSHEARING"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -499,17 +499,17 @@ tables:
     target_table: "TEST_RLCIS_SECTION"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -517,17 +517,17 @@ tables:
     target_table: "TEST_RLCIS_STARRATE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -535,37 +535,37 @@ tables:
     target_table: "TEST_RLCIS_STATISTICCUTOFF"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
-    
+
 ################################################################################# 30
   - source_table: "StatLandCtrlCase"
     target_table: "TEST_RLCIS_STATLANDCTRLCASE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -573,17 +573,17 @@ tables:
     target_table: "TEST_RLCIS_SURCHARGECATEGORY"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -591,17 +591,17 @@ tables:
     target_table: "TEST_RLCIS_SURCHARGEMAPPING"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -609,17 +609,17 @@ tables:
     target_table: "TEST_RLCIS_SURCHARGETYPE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -627,37 +627,37 @@ tables:
     target_table: "TEST_RLCIS_USERACCT"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
-    
+
 ################################################################################# 35
   - source_table: "Vote"
     target_table: "TEST_RLCIS_VOTE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -665,17 +665,17 @@ tables:
     target_table: "TEST_RLCIS_WORKSORDER"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -683,17 +683,17 @@ tables:
     target_table: "TEST_RLCIS_WORKSORDERITEM"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -701,17 +701,17 @@ tables:
     target_table: "TEST_RLCIS_WORKSORDERSOURCE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
@@ -719,66 +719,85 @@ tables:
     target_table: "TEST_RLCIS_WORKSORDERSURCHARGE"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
 
-    
+
 ################################################################################# 40
   - source_table: "Year"
     target_table: "TEST_RLCIS_YEAR"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
-    batch_size: 1000
-    
+    batch_size: 5000
+
     # Primary key definition
-    primary_key: 
-    
+    primary_key:
+
     # Indexes to create
     indexes:
-      - name: 
+      - name:
         columns: []
         unique: false
-    
+
     # No foreign keys for parent table
     foreign_keys: []
+
+  - source_table: "CtrlSite"
+    target_table: "TEST_RLCIS_CTRLSITE"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
 
 ################################################################################# Setting
 # Global settings
 settings:
   # Default batch size for all tables
-  default_batch_size: 1000
-  
+  default_batch_size: 5000
+
   # Enable/disable foreign key creation
   create_foreign_keys: false
-  
+
   # Enable/disable index creation
   create_indexes: false
-  
+
   # Drop and recreate tables
   drop_existing_tables: true
-  
+
   # Verify data after transfer
   verify_transfers: true
-  
+
   # Data quality check settings
   data_quality_checks:
     # Enable/disable data quality checks after transfer
     enabled: true
-    
+
     # Row count comparison - check if target has same number of rows as source
     row_count_check: true
-    
+
     # Column content comparison - sample and compare content between source and target
     content_comparison:
       enabled: true
@@ -787,7 +806,7 @@ settings:
       # Minimum number of rows to sample (regardless of percentage)
       min_sample_size: 10
       # Maximum number of rows to sample (to avoid excessive processing)
-      max_sample_size: 10000
-    
+      max_sample_size: 50000
+
     # Quality check results table name in Oracle
     results_table_name: "DATA_QUALITY_CHECKING_RLCIS"
