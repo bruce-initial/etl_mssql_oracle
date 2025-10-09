@@ -290,38 +290,70 @@ class DataQualityChecker:
                 'mismatch_details': []
             }
         
-        # Get common columns (case-insensitive) - ensure we don't lose duplicate case variations
-        source_cols = {}
-        target_cols = {}
+        # Handle case sensitivity differences: MSSQL is case-insensitive, Oracle is case-sensitive
+        # For MSSQL source: use case-insensitive matching (normalize to lowercase)
+        # For Oracle target: preserve exact case but allow fuzzy matching for missing columns
         
-        # Build mappings while preserving all case variations
+        source_cols = {}  # key: normalized name, value: list of actual column names
+        target_cols = {}  # key: actual column name, value: actual column name
+        target_cols_normalized = {}  # key: normalized name, value: list of actual column names
+        
+        # Build source column mapping (MSSQL - case insensitive)
         for col in source_df.columns:
             col_lower = col.lower()
             if col_lower not in source_cols:
                 source_cols[col_lower] = []
             source_cols[col_lower].append(col)
         
+        # Build target column mappings (Oracle - case sensitive)
         for col in target_df.columns:
+            target_cols[col] = col  # Exact case mapping
+            
+            # Also build normalized mapping for fuzzy matching
             col_lower = col.lower()
-            if col_lower not in target_cols:
-                target_cols[col_lower] = []
-            target_cols[col_lower].append(col)
+            if col_lower not in target_cols_normalized:
+                target_cols_normalized[col_lower] = []
+            target_cols_normalized[col_lower].append(col)
         
-        # Find columns that exist in both (by lowercase name)
-        common_cols = set(source_cols.keys()).intersection(set(target_cols.keys()))
+        # Find matches with case sensitivity handling
+        # 1. Try exact case matches first (for Oracle target columns)
+        # 2. Fall back to case-insensitive matches
+        common_cols = set()
+        exact_matches = {}  # source_col_norm -> target_col_exact
         
-        # Track additional columns in target that don't exist in source
-        target_only_cols = set(target_cols.keys()) - set(source_cols.keys())
-        source_only_cols = set(source_cols.keys()) - set(target_cols.keys())
+        for source_norm in source_cols.keys():
+            # Try to find exact case match first
+            source_actual_names = source_cols[source_norm]
+            
+            if source_norm in target_cols_normalized:
+                target_actual_names = target_cols_normalized[source_norm]
+                
+                # Prefer exact case match if available
+                target_match = None
+                for source_actual in source_actual_names:
+                    if source_actual in target_actual_names:
+                        target_match = source_actual  # Exact case match
+                        break
+                
+                # If no exact match, use the first available target column
+                if target_match is None:
+                    target_match = target_actual_names[0]
+                
+                common_cols.add(source_norm)
+                exact_matches[source_norm] = target_match
+        
+        # Track missing and additional columns
+        source_only_cols = set(source_cols.keys()) - common_cols
+        target_only_cols = set(target_cols_normalized.keys()) - common_cols
         
         # Get the actual column names for missing/additional columns
         missing_columns = []
-        for col in source_only_cols:
-            missing_columns.extend(source_cols[col])
+        for col_norm in source_only_cols:
+            missing_columns.extend(source_cols[col_norm])
         
         additional_columns = []
-        for col in target_only_cols:
-            additional_columns.extend(target_cols[col])
+        for col_norm in target_only_cols:
+            additional_columns.extend(target_cols_normalized[col_norm])
         
         mismatch_details = []
         
@@ -348,20 +380,21 @@ class DataQualityChecker:
         columns_matched = 0
         column_details = {}
         
-        # Compare each common column - handle case variations properly
-        for col_lower in common_cols:
-            source_col_list = source_cols[col_lower]
-            target_col_list = target_cols[col_lower]
+        # Compare each common column with case sensitivity handling
+        for col_norm in common_cols:
+            source_col_list = source_cols[col_norm]
+            target_col = exact_matches[col_norm]
             
-            # Check for case variations and report them
+            # Check for case variations in source and report them
             if len(source_col_list) > 1:
-                mismatch_details.append(f"Source has multiple case variations for '{col_lower}': {', '.join(source_col_list)}")
-            if len(target_col_list) > 1:
-                mismatch_details.append(f"Target has multiple case variations for '{col_lower}': {', '.join(target_col_list)}")
+                mismatch_details.append(f"Source has multiple case variations for '{col_norm}': {', '.join(source_col_list)}")
             
-            # Use the first column name from each list for comparison
+            # Use the first source column name for comparison
             source_col = source_col_list[0]
-            target_col = target_col_list[0]
+            
+            # Report case mismatch if source and target column names differ in case
+            if source_col != target_col:
+                mismatch_details.append(f"Case mismatch: source '{source_col}' vs target '{target_col}'")
             
             try:
                 # Get column values from both dataframes (already cast to strings)
