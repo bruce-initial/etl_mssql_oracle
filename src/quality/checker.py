@@ -283,6 +283,9 @@ class DataQualityChecker:
                 'columns_checked': 0,
                 'columns_matched': 0,
                 'match_percentage': 0.0,
+                'total_source_columns': 0,
+                'missing_columns': [],
+                'additional_columns': [],
                 'details': 'No data to compare',
                 'mismatch_details': []
             }
@@ -311,26 +314,32 @@ class DataQualityChecker:
         target_only_cols = set(target_cols.keys()) - set(source_cols.keys())
         source_only_cols = set(source_cols.keys()) - set(target_cols.keys())
         
+        # Get the actual column names for missing/additional columns
+        missing_columns = []
+        for col in source_only_cols:
+            missing_columns.extend(source_cols[col])
+        
+        additional_columns = []
+        for col in target_only_cols:
+            additional_columns.extend(target_cols[col])
+        
         mismatch_details = []
         
         # Report additional columns
-        if target_only_cols:
-            target_only_names = []
-            for col in target_only_cols:
-                target_only_names.extend(target_cols[col])
-            mismatch_details.append(f"Additional columns in target: {', '.join(target_only_names)}")
+        if additional_columns:
+            mismatch_details.append(f"Additional columns in target: {', '.join(additional_columns)}")
         
-        if source_only_cols:
-            source_only_names = []
-            for col in source_only_cols:
-                source_only_names.extend(source_cols[col])
-            mismatch_details.append(f"Missing columns in target: {', '.join(source_only_names)}")
+        if missing_columns:
+            mismatch_details.append(f"Missing columns in target: {', '.join(missing_columns)}")
         
         if not common_cols:
             return {
                 'columns_checked': 0,
                 'columns_matched': 0,
                 'match_percentage': 0.0,
+                'total_source_columns': len(source_cols),
+                'missing_columns': missing_columns,
+                'additional_columns': additional_columns,
                 'details': 'No common columns found',
                 'mismatch_details': mismatch_details
             }
@@ -422,12 +431,22 @@ class DataQualityChecker:
                     'error': str(e)
                 }
         
-        match_percentage = (columns_matched / columns_checked * 100) if columns_checked > 0 else 0
+        # Calculate match percentage considering missing columns
+        total_source_columns = len(source_cols)
+        if total_source_columns > 0:
+            # Match percentage should account for missing columns
+            # Only columns that exist in both source and target AND have matching content count as matched
+            match_percentage = (columns_matched / total_source_columns * 100)
+        else:
+            match_percentage = 0.0
         
         return {
             'columns_checked': columns_checked,
             'columns_matched': columns_matched,
             'match_percentage': match_percentage,
+            'total_source_columns': total_source_columns,
+            'missing_columns': missing_columns,
+            'additional_columns': additional_columns,
             'column_details': column_details,
             'mismatch_details': mismatch_details
         }
@@ -453,7 +472,9 @@ class DataQualityChecker:
                     'match_percentage': 0.0,
                     'status': 'WARNING',
                     'error_message': 'No data to compare',
-                    'duration': time.time() - start_time
+                    'duration': time.time() - start_time,
+                    'missing_columns': [],
+                    'additional_columns': []
                 }
             
             # Get random samples
@@ -474,26 +495,43 @@ class DataQualityChecker:
             # Determine overall status and build detailed error message
             match_percentage = comparison_result['match_percentage']
             mismatch_details = comparison_result.get('mismatch_details', [])
+            missing_columns = comparison_result.get('missing_columns', [])
+            additional_columns = comparison_result.get('additional_columns', [])
             
-            if match_percentage >= 95:
+            # Build comprehensive error message that includes missing/additional columns
+            error_parts = []
+            
+            # Always include missing columns if any exist
+            if missing_columns:
+                error_parts.append(f"Missing columns in target: {', '.join(missing_columns)}")
+            
+            # Include additional columns if any exist
+            if additional_columns:
+                error_parts.append(f"Additional columns in target: {', '.join(additional_columns)}")
+            
+            # Include other mismatch details (excluding missing/additional column details to avoid duplication)
+            other_details = [detail for detail in mismatch_details 
+                           if not detail.startswith('Missing columns in target:') 
+                           and not detail.startswith('Additional columns in target:')]
+            error_parts.extend(other_details)
+            
+            # Determine status based on match percentage and missing columns
+            if match_percentage >= 95 and not missing_columns:
                 status = 'PASSED'
-                error_message = None
-                # Even for passed checks, include minor mismatches if any
-                if mismatch_details and any('Additional columns in target' in detail for detail in mismatch_details):
-                    target_only_details = [detail for detail in mismatch_details if 'Additional columns in target' in detail]
-                    error_message = '; '.join(target_only_details)
-            elif match_percentage >= 80:
+                error_message = ' | '.join(error_parts) if error_parts else None
+            elif match_percentage >= 80 and not missing_columns:
                 status = 'WARNING'
                 error_message = f"Content match below threshold: {match_percentage:.1f}%"
-                if mismatch_details:
-                    # Include ALL mismatch details for complete analysis
-                    error_message += f" | Details: {' | '.join(mismatch_details)}"
+                if error_parts:
+                    error_message += f" | {' | '.join(error_parts)}"
             else:
                 status = 'FAILED'
-                error_message = f"Poor content match: {match_percentage:.1f}%"
-                if mismatch_details:
-                    # Include ALL mismatch details for complete analysis
-                    error_message += f" | Details: {' | '.join(mismatch_details)}"
+                if missing_columns:
+                    error_message = f"Missing columns detected. Content match: {match_percentage:.1f}%"
+                else:
+                    error_message = f"Poor content match: {match_percentage:.1f}%"
+                if error_parts:
+                    error_message += f" | {' | '.join(error_parts)}"
             
             duration = time.time() - start_time
             actual_sample_percentage = (len(source_df) / actual_count) if actual_count > 0 else 0
@@ -532,7 +570,9 @@ class DataQualityChecker:
                 'match_percentage': 0.0,
                 'status': 'FAILED',
                 'error_message': error_msg,
-                'duration': duration
+                'duration': duration,
+                'missing_columns': [],
+                'additional_columns': []
             }
     
     def record_check_result(self, source_table: str, target_table: str, 
