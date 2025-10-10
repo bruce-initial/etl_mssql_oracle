@@ -204,8 +204,8 @@ class DataTypeMapper:
                     elif isinstance(val, str) and val.strip() == "":
                         # Preserve original whitespace-only strings as-is (don't strip them)
                         processed_row.append(val)
-                    elif str(val).lower() in ['null', 'none', '<null>']:
-                        # Handle various NULL representations as actual NULL
+                    elif str(val).lower() in ['null', '<null>']:
+                        # Handle specific NULL representations as actual NULL (exclude 'none')
                         processed_row.append(None)
                     elif isinstance(val, bool):
                         # Convert boolean to '1'/'0' strings for Oracle NUMBER(1) columns

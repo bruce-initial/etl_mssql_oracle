@@ -215,12 +215,31 @@ class DataQualityChecker:
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
 
-        # Ensure both DataFrames are sorted by first column to guarantee row alignment
+        # Ensure both DataFrames are sorted by the same logical column to guarantee row alignment
         if len(source_df) > 0 and len(target_df) > 0:
-            first_col_source = source_df.columns[0]
-            first_col_target = target_df.columns[0]
-            source_df = source_df.sort(first_col_source)
-            target_df = target_df.sort(first_col_target)
+            # Find a common column to sort by (case-insensitive)
+            source_cols_lower = [col.lower() for col in source_df.columns]
+            target_cols_lower = [col.lower() for col in target_df.columns]
+            
+            sort_col_source = None
+            sort_col_target = None
+            
+            # Find first common column for sorting
+            for i, source_col_lower in enumerate(source_cols_lower):
+                if source_col_lower in target_cols_lower:
+                    sort_col_source = source_df.columns[i]
+                    target_col_idx = target_cols_lower.index(source_col_lower)
+                    sort_col_target = target_df.columns[target_col_idx]
+                    break
+            
+            # Sort both dataframes by the same logical column
+            if sort_col_source and sort_col_target:
+                source_df = source_df.sort(sort_col_source)
+                target_df = target_df.sort(sort_col_target)
+            else:
+                # Fallback: sort by first column if no common columns (shouldn't happen but safety net)
+                source_df = source_df.sort(source_df.columns[0])
+                target_df = target_df.sort(target_df.columns[0])
 
         return source_df, target_df
     
@@ -248,7 +267,7 @@ class DataQualityChecker:
                 elif isinstance(val, str) and val.strip() == "":
                     # Treat whitespace-only strings as NULL for quality checking
                     processed_row.append(None)
-                elif str(val).lower() in ['null', 'none', '<null>']:
+                elif str(val).lower() in ['null', '<null>']:
                     processed_row.append(None)
                 elif isinstance(val, bool):
                     processed_row.append('1' if val else '0')
@@ -426,18 +445,21 @@ class DataQualityChecker:
                 mismatch_details.append(f"Case mismatch: source '{source_col}' vs target '{target_col}'")
             
             try:
-                # Get column values from both dataframes (already cast to strings)
-                source_values = source_df[source_col].sort()
-                target_values = target_df[target_col].sort()
+                # Get column values from both dataframes (preserve row order - do NOT sort)
+                source_values = source_df[source_col]
+                target_values = target_df[target_col]
                 
                 # Compare values (handling nulls and different lengths)
                 if len(source_values) == len(target_values):
-                    # Element-wise comparison using Polars with string casting
-                    # Handle nulls by checking both null or both equal
+                    # Element-wise comparison with case-insensitive string comparison
                     source_is_null = source_values.is_null()
                     target_is_null = target_values.is_null()
                     both_null = source_is_null & target_is_null
-                    both_equal = (source_values == target_values).fill_null(False)
+                    
+                    # Case-insensitive comparison for non-null values
+                    source_lower = source_values.str.to_lowercase().fill_null("")
+                    target_lower = target_values.str.to_lowercase().fill_null("")
+                    both_equal = (source_lower == target_lower)
                     
                     matches = (both_null | both_equal).sum()
                     total = len(source_values)
