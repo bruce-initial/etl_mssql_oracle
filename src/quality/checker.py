@@ -142,120 +142,39 @@ class DataQualityChecker:
     def get_random_sample(self, source_table: str, target_table: str, 
                          source_schema: str, sample_size: int, 
                          primary_key: Optional[str] = None) -> Tuple[pl.DataFrame, pl.DataFrame]:
-        """Get random sample from both source and target tables using hash-based matching"""
+        """Get sample from both source and target tables - simplified approach"""
         
-        # New approach: Get full data from both tables, then match and sample
-        source_query = f"SELECT * FROM {source_schema}.{source_table}"
-        target_query = f"SELECT * FROM {target_table}"
+        # Simple approach: get first N rows from both tables
+        source_query = f"SELECT TOP {sample_size} * FROM {source_schema}.{source_table}"
+        target_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= {sample_size}"
         
         self.logger.info(f"Quality Check (source query): {source_query}")
-        source_df_full = self.mssql_conn.read_table_as_dataframe(source_query)
+        source_df = self.mssql_conn.read_table_as_dataframe(source_query)
         
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df_full = self.oracle_conn.read_table_as_dataframe(target_query)
         
-        if len(source_df_full) == 0 or len(target_df_full) == 0:
-            return source_df_full, target_df_full
+        if len(source_df) == 0 or len(target_df_full) == 0:
+            return source_df, target_df_full
         
         # Find common columns (MSSQL mixed case -> Oracle uppercase)
-        source_cols_map = {col.upper(): col for col in source_df_full.columns}  # Map uppercase to actual MSSQL names
-        target_cols_map = {col: col for col in target_df_full.columns}  # Oracle columns already uppercase
+        source_cols_map = {col.upper(): col for col in source_df.columns}
+        target_cols_map = {col: col for col in target_df_full.columns}
         common_cols_upper = set(source_cols_map.keys()) & set(target_cols_map.keys())
         
         if not common_cols_upper:
-            # No common columns, return empty
             return pl.DataFrame(), pl.DataFrame()
         
-        # Use ALL common columns for unique row identification
-        hash_cols_upper = list(common_cols_upper)
+        # Filter target to only include common columns (exclude additional columns)
+        target_columns_to_keep = [target_cols_map[col] for col in common_cols_upper]
+        target_df = target_df_full.select(target_columns_to_keep)
         
-        # Add row hash + row index to source for unique identification
-        source_hash_cols = [source_cols_map[col] for col in hash_cols_upper]
-        source_with_hash = source_df_full.with_row_index("_row_idx").with_columns([
-            pl.concat_str([
-                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                for col in source_hash_cols
-            ], separator="|").alias("_content_hash"),
-            pl.concat_str([
-                pl.concat_str([
-                    pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                    for col in source_hash_cols
-                ], separator="|"),
-                pl.col("_row_idx").cast(pl.String)
-            ], separator="::").alias("_unique_hash")
-        ])
+        # Ensure both have same number of rows
+        min_rows = min(len(source_df), len(target_df))
+        source_sample = source_df[:min_rows]
+        target_sample = target_df[:min_rows]
         
-        # Add row hash + row index to target for unique identification
-        target_hash_cols = [target_cols_map[col] for col in hash_cols_upper]
-        target_with_hash = target_df_full.with_row_index("_row_idx").with_columns([
-            pl.concat_str([
-                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                for col in target_hash_cols
-            ], separator="|").alias("_content_hash"),
-            pl.concat_str([
-                pl.concat_str([
-                    pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                    for col in target_hash_cols
-                ], separator="|"),
-                pl.col("_row_idx").cast(pl.String)
-            ], separator="::").alias("_unique_hash")
-        ])
-        
-        # Find rows with matching content (ignore row index for content matching)
-        source_content_hashes = source_with_hash["_content_hash"].to_list()
-        target_content_hashes = target_with_hash["_content_hash"].to_list()
-        
-        # Create mapping of content hash to row indices for both sides
-        source_hash_to_idx = {}
-        for i, hash_val in enumerate(source_content_hashes):
-            if hash_val not in source_hash_to_idx:
-                source_hash_to_idx[hash_val] = []
-            source_hash_to_idx[hash_val].append(i)
-        
-        target_hash_to_idx = {}
-        for i, hash_val in enumerate(target_content_hashes):
-            if hash_val not in target_hash_to_idx:
-                target_hash_to_idx[hash_val] = []
-            target_hash_to_idx[hash_val].append(i)
-        
-        # Find matching pairs (content hash exists in both)
-        common_content_hashes = set(source_hash_to_idx.keys()) & set(target_hash_to_idx.keys())
-        
-        if not common_content_hashes:
-            self.logger.warning("No matching rows found between source and target")
-            return pl.DataFrame(), pl.DataFrame()
-        
-        # Create matched pairs ensuring 1:1 correspondence
-        matched_pairs = []
-        for content_hash in common_content_hashes:
-            source_indices = source_hash_to_idx[content_hash]
-            target_indices = target_hash_to_idx[content_hash]
-            
-            # Pair up indices (take minimum count to avoid mismatches)
-            pair_count = min(len(source_indices), len(target_indices))
-            for i in range(pair_count):
-                matched_pairs.append((source_indices[i], target_indices[i]))
-        
-        # Sample from matched pairs
-        if len(matched_pairs) > sample_size:
-            matched_pairs = random.sample(matched_pairs, sample_size)
-        
-        # Extract samples using matched indices
-        source_indices = [pair[0] for pair in matched_pairs]
-        target_indices = [pair[1] for pair in matched_pairs]
-        
-        source_sample = source_df_full[source_indices]
-        target_sample_full = target_df_full[target_indices]
-        
-        # Filter target sample to only include columns that exist in source (exclude additional columns)
-        target_columns_to_keep = []
-        for col_upper in common_cols_upper:
-            target_col = target_cols_map[col_upper]
-            target_columns_to_keep.append(target_col)
-        
-        target_sample = target_sample_full.select(target_columns_to_keep)
-        
-        self.logger.info(f"Sampled {len(source_sample)} matching rows for comparison")
+        self.logger.info(f"Sampled {len(source_sample)} rows for comparison")
         self.logger.info(f"Source columns: {source_sample.columns}")
         self.logger.info(f"Target columns: {target_sample.columns}")
         return source_sample, target_sample
