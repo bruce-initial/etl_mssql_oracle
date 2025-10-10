@@ -32,7 +32,8 @@ class DataQualityChecker:
         self.data_mapper = DataTypeMapper()
         
         # Extract quality check configuration
-        self.quality_config = config.get('data_quality_checks', {})
+        settings = config.get('settings', {})
+        self.quality_config = settings.get('data_quality_checks', {})
         self.results_table = self.quality_config.get('results_table_name', 'DATA_QUALITY_CHECKING_RLCIS')
         
         # Session ID for tracking related checks
@@ -165,9 +166,38 @@ class DataQualityChecker:
             where_clause = f"WHERE {primary_key} IN ('{pk_list}')"
             
         else:
-            # Without primary key, we need to ensure we sample the same logical rows
-            # Use deterministic approach by ordering by first column consistently
-            where_clause = f"ORDER BY 1 OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
+            # Without primary key, get all data first to find common columns for ordering
+            source_query_temp = f"SELECT * FROM {source_schema}.{source_table}"
+            target_query_temp = f"SELECT * FROM {target_table}"
+            
+            # Get column info to find a common column for ordering
+            source_cols_query = f"SELECT TOP 1 * FROM {source_schema}.{source_table}"
+            target_cols_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= 1"
+            
+            source_sample_temp = self.mssql_conn.read_table_as_dataframe(source_cols_query)
+            target_sample_temp = self.oracle_conn.read_table_as_dataframe(target_cols_query)
+            
+            # Find first common column (case-insensitive)
+            source_cols_lower = [col.lower() for col in source_sample_temp.columns]
+            target_cols_lower = [col.lower() for col in target_sample_temp.columns]
+            
+            common_col = None
+            for i, source_col_lower in enumerate(source_cols_lower):
+                if source_col_lower in target_cols_lower:
+                    source_col_actual = source_sample_temp.columns[i]
+                    target_col_idx = target_cols_lower.index(source_col_lower)
+                    target_col_actual = target_sample_temp.columns[target_col_idx]
+                    common_col = (source_col_actual, target_col_actual)
+                    break
+            
+            if common_col:
+                source_order_col, target_order_col = common_col
+                where_clause = f"ORDER BY [{source_order_col}] OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
+                target_order_clause = f"ORDER BY {target_order_col}"
+            else:
+                # Fallback to first column if no common columns found
+                where_clause = f"ORDER BY 1 OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
+                target_order_clause = "ORDER BY 1"
         
         # Get source sample
         source_query = f"SELECT * FROM {source_schema}.{source_table} {where_clause}"
@@ -178,10 +208,9 @@ class DataQualityChecker:
         if primary_key and 'WHERE' in where_clause:
             target_query = f"SELECT * FROM {target_table} {where_clause}"
         else:
-            # Use the same deterministic ordering by first column for target
+            # Use consistent ordering with source
             actual_sample_size = len(source_df)
-            # Oracle equivalent: ORDER BY first column, limit rows
-            target_query = f"SELECT * FROM (SELECT * FROM {target_table} ORDER BY 1) WHERE ROWNUM <= {actual_sample_size}"
+            target_query = f"SELECT * FROM (SELECT * FROM {target_table} {target_order_clause}) WHERE ROWNUM <= {actual_sample_size}"
         
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)

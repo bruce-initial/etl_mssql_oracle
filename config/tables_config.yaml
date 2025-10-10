@@ -802,7 +802,7 @@ settings:
     content_comparison:
       enabled: true
       # Percentage of rows to sample for content comparison (0.1 = 10%)
-      sample_percentage: 0.1
+      sample_percentage: 1
       # Minimum number of rows to sample (regardless of percentage)
       min_sample_size: 10
       # Maximum number of rows to sample (to avoid excessive processing)
