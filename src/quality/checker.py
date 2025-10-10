@@ -157,73 +157,107 @@ class DataQualityChecker:
         if len(source_df_full) == 0 or len(target_df_full) == 0:
             return source_df_full, target_df_full
         
-        # Find common columns (case-insensitive)
-        source_cols_lower = {col.lower(): col for col in source_df_full.columns}
-        target_cols_lower = {col.lower(): col for col in target_df_full.columns}
-        common_cols_lower = set(source_cols_lower.keys()) & set(target_cols_lower.keys())
+        # Find common columns (MSSQL mixed case -> Oracle uppercase)
+        source_cols_map = {col.upper(): col for col in source_df_full.columns}  # Map uppercase to actual MSSQL names
+        target_cols_map = {col: col for col in target_df_full.columns}  # Oracle columns already uppercase
+        common_cols_upper = set(source_cols_map.keys()) & set(target_cols_map.keys())
         
-        if not common_cols_lower:
+        if not common_cols_upper:
             # No common columns, return empty
             return pl.DataFrame(), pl.DataFrame()
         
-        # Create row hashes for matching using first few common columns (max 3 for performance)
-        hash_cols = list(common_cols_lower)[:3]
+        # Use ALL common columns for unique row identification
+        hash_cols_upper = list(common_cols_upper)
         
-        # Add row hash to source
-        source_hash_cols = [source_cols_lower[col] for col in hash_cols]
-        source_with_hash = source_df_full.with_columns([
+        # Add row hash + row index to source for unique identification
+        source_hash_cols = [source_cols_map[col] for col in hash_cols_upper]
+        source_with_hash = source_df_full.with_row_index("_row_idx").with_columns([
             pl.concat_str([
                 pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
                 for col in source_hash_cols
-            ], separator="|").alias("_row_hash")
+            ], separator="|").alias("_content_hash"),
+            pl.concat_str([
+                pl.concat_str([
+                    pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                    for col in source_hash_cols
+                ], separator="|"),
+                pl.col("_row_idx").cast(pl.String)
+            ], separator="::").alias("_unique_hash")
         ])
         
-        # Add row hash to target  
-        target_hash_cols = [target_cols_lower[col] for col in hash_cols]
-        target_with_hash = target_df_full.with_columns([
+        # Add row hash + row index to target for unique identification
+        target_hash_cols = [target_cols_map[col] for col in hash_cols_upper]
+        target_with_hash = target_df_full.with_row_index("_row_idx").with_columns([
             pl.concat_str([
                 pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
                 for col in target_hash_cols
-            ], separator="|").alias("_row_hash")
+            ], separator="|").alias("_content_hash"),
+            pl.concat_str([
+                pl.concat_str([
+                    pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                    for col in target_hash_cols
+                ], separator="|"),
+                pl.col("_row_idx").cast(pl.String)
+            ], separator="::").alias("_unique_hash")
         ])
         
-        # Find common hashes
-        source_hashes = set(source_with_hash["_row_hash"].to_list())
-        target_hashes = set(target_with_hash["_row_hash"].to_list())
-        common_hashes = list(source_hashes & target_hashes)
+        # Find rows with matching content (ignore row index for content matching)
+        source_content_hashes = source_with_hash["_content_hash"].to_list()
+        target_content_hashes = target_with_hash["_content_hash"].to_list()
         
-        if not common_hashes:
+        # Create mapping of content hash to row indices for both sides
+        source_hash_to_idx = {}
+        for i, hash_val in enumerate(source_content_hashes):
+            if hash_val not in source_hash_to_idx:
+                source_hash_to_idx[hash_val] = []
+            source_hash_to_idx[hash_val].append(i)
+        
+        target_hash_to_idx = {}
+        for i, hash_val in enumerate(target_content_hashes):
+            if hash_val not in target_hash_to_idx:
+                target_hash_to_idx[hash_val] = []
+            target_hash_to_idx[hash_val].append(i)
+        
+        # Find matching pairs (content hash exists in both)
+        common_content_hashes = set(source_hash_to_idx.keys()) & set(target_hash_to_idx.keys())
+        
+        if not common_content_hashes:
             self.logger.warning("No matching rows found between source and target")
             return pl.DataFrame(), pl.DataFrame()
         
-        # Sample from common hashes
-        sample_hashes = random.sample(common_hashes, min(sample_size, len(common_hashes)))
+        # Create matched pairs ensuring 1:1 correspondence
+        matched_pairs = []
+        for content_hash in common_content_hashes:
+            source_indices = source_hash_to_idx[content_hash]
+            target_indices = target_hash_to_idx[content_hash]
+            
+            # Pair up indices (take minimum count to avoid mismatches)
+            pair_count = min(len(source_indices), len(target_indices))
+            for i in range(pair_count):
+                matched_pairs.append((source_indices[i], target_indices[i]))
         
-        # Filter both dataframes to matching rows and remove hash column
-        source_sample = source_with_hash.filter(
-            pl.col("_row_hash").is_in(sample_hashes)
-        ).drop("_row_hash")
+        # Sample from matched pairs
+        if len(matched_pairs) > sample_size:
+            matched_pairs = random.sample(matched_pairs, sample_size)
         
-        target_sample = target_with_hash.filter(
-            pl.col("_row_hash").is_in(sample_hashes)
-        ).drop("_row_hash")
+        # Extract samples using matched indices
+        source_indices = [pair[0] for pair in matched_pairs]
+        target_indices = [pair[1] for pair in matched_pairs]
         
-        # Sort both by hash to ensure same order (re-add hash temporarily for sorting)
-        source_sample = source_sample.with_columns([
-            pl.concat_str([
-                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                for col in source_hash_cols
-            ], separator="|").alias("_sort_hash")
-        ]).sort("_sort_hash").drop("_sort_hash")
+        source_sample = source_df_full[source_indices]
+        target_sample_full = target_df_full[target_indices]
         
-        target_sample = target_sample.with_columns([
-            pl.concat_str([
-                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
-                for col in target_hash_cols
-            ], separator="|").alias("_sort_hash")
-        ]).sort("_sort_hash").drop("_sort_hash")
+        # Filter target sample to only include columns that exist in source (exclude additional columns)
+        target_columns_to_keep = []
+        for col_upper in common_cols_upper:
+            target_col = target_cols_map[col_upper]
+            target_columns_to_keep.append(target_col)
+        
+        target_sample = target_sample_full.select(target_columns_to_keep)
         
         self.logger.info(f"Sampled {len(source_sample)} matching rows for comparison")
+        self.logger.info(f"Source columns: {source_sample.columns}")
+        self.logger.info(f"Target columns: {target_sample.columns}")
         return source_sample, target_sample
     
     def _apply_etl_transformations_to_dataframe(self, df: pl.DataFrame) -> pl.DataFrame:
@@ -321,70 +355,34 @@ class DataQualityChecker:
                 'mismatch_details': []
             }
         
-        # Handle case sensitivity differences: MSSQL is case-insensitive, Oracle is case-sensitive
-        # For MSSQL source: use case-insensitive matching (normalize to lowercase)
-        # For Oracle target: preserve exact case but allow fuzzy matching for missing columns
+        # Handle MSSQL mixed case to Oracle uppercase mapping
+        source_cols_map = {}  # key: uppercase, value: actual MSSQL column name
+        target_cols_map = {}  # key: uppercase, value: Oracle column name
         
-        source_cols = {}  # key: normalized name, value: list of actual column names
-        target_cols = {}  # key: actual column name, value: actual column name
-        target_cols_normalized = {}  # key: normalized name, value: list of actual column names
-        
-        # Build source column mapping (MSSQL - case insensitive)
+        # Build source column mapping (MSSQL mixed case -> uppercase)
         for col in source_df.columns:
-            col_lower = col.lower()
-            if col_lower not in source_cols:
-                source_cols[col_lower] = []
-            source_cols[col_lower].append(col)
+            source_cols_map[col.upper()] = col
         
-        # Build target column mappings (Oracle - case sensitive)
+        # Build target column mapping (Oracle already uppercase)
         for col in target_df.columns:
-            target_cols[col] = col  # Exact case mapping
-            
-            # Also build normalized mapping for fuzzy matching
-            col_lower = col.lower()
-            if col_lower not in target_cols_normalized:
-                target_cols_normalized[col_lower] = []
-            target_cols_normalized[col_lower].append(col)
+            target_cols_map[col.upper()] = col
         
-        # Find matches with case sensitivity handling
-        # 1. Try exact case matches first (for Oracle target columns)
-        # 2. Fall back to case-insensitive matches
-        common_cols = set()
-        exact_matches = {}  # source_col_norm -> target_col_exact
+        # Find matching columns
+        common_cols_upper = set(source_cols_map.keys()) & set(target_cols_map.keys())
+        exact_matches = {}  # source_col -> target_col
         
-        for source_norm in source_cols.keys():
-            # Try to find exact case match first
-            source_actual_names = source_cols[source_norm]
-            
-            if source_norm in target_cols_normalized:
-                target_actual_names = target_cols_normalized[source_norm]
-                
-                # Prefer exact case match if available
-                target_match = None
-                for source_actual in source_actual_names:
-                    if source_actual in target_actual_names:
-                        target_match = source_actual  # Exact case match
-                        break
-                
-                # If no exact match, use the first available target column
-                if target_match is None:
-                    target_match = target_actual_names[0]
-                
-                common_cols.add(source_norm)
-                exact_matches[source_norm] = target_match
+        for col_upper in common_cols_upper:
+            source_col = source_cols_map[col_upper]
+            target_col = target_cols_map[col_upper]
+            exact_matches[source_col] = target_col
         
         # Track missing and additional columns
-        source_only_cols = set(source_cols.keys()) - common_cols
-        target_only_cols = set(target_cols_normalized.keys()) - common_cols
+        source_only_cols = set(source_cols_map.keys()) - common_cols_upper
+        target_only_cols = set(target_cols_map.keys()) - common_cols_upper
         
-        # Get the actual column names for missing/additional columns
-        missing_columns = []
-        for col_norm in source_only_cols:
-            missing_columns.extend(source_cols[col_norm])
-        
-        additional_columns = []
-        for col_norm in target_only_cols:
-            additional_columns.extend(target_cols_normalized[col_norm])
+        # Get actual column names for missing/additional columns
+        missing_columns = [source_cols_map[col] for col in source_only_cols]
+        additional_columns = [target_cols_map[col] for col in target_only_cols]
         
         mismatch_details = []
         
@@ -395,37 +393,24 @@ class DataQualityChecker:
         if missing_columns:
             mismatch_details.append(f"Missing columns in target: {', '.join(missing_columns)}")
         
-        if not common_cols:
+        if not common_cols_upper:
             return {
                 'columns_checked': 0,
                 'columns_matched': 0,
                 'match_percentage': 0.0,
-                'total_source_columns': len(source_cols),
+                'total_source_columns': len(source_cols_map),
                 'missing_columns': missing_columns,
                 'additional_columns': additional_columns,
                 'details': 'No common columns found',
                 'mismatch_details': mismatch_details
             }
         
-        columns_checked = len(common_cols)
+        columns_checked = len(common_cols_upper)
         columns_matched = 0
         column_details = {}
         
-        # Compare each common column with case sensitivity handling
-        for col_norm in common_cols:
-            source_col_list = source_cols[col_norm]
-            target_col = exact_matches[col_norm]
-            
-            # Check for case variations in source and report them
-            if len(source_col_list) > 1:
-                mismatch_details.append(f"Source has multiple case variations for '{col_norm}': {', '.join(source_col_list)}")
-            
-            # Use the first source column name for comparison
-            source_col = source_col_list[0]
-            
-            # Report case mismatch if source and target column names differ in case
-            if source_col != target_col:
-                mismatch_details.append(f"Case mismatch: source '{source_col}' vs target '{target_col}'")
+        # Compare each common column
+        for source_col, target_col in exact_matches.items():
             
             try:
                 # Get column values from both dataframes (preserve row order - do NOT sort)
@@ -506,7 +491,7 @@ class DataQualityChecker:
                 }
         
         # Calculate match percentage considering missing columns
-        total_source_columns = len(source_cols)
+        total_source_columns = len(source_cols_map)
         if total_source_columns > 0:
             # Match percentage should account for missing columns
             # Only columns that exist in both source and target AND have matching content count as matched
