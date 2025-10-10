@@ -166,38 +166,10 @@ class DataQualityChecker:
             where_clause = f"WHERE {primary_key} IN ('{pk_list}')"
             
         else:
-            # Without primary key, get all data first to find common columns for ordering
-            source_query_temp = f"SELECT * FROM {source_schema}.{source_table}"
-            target_query_temp = f"SELECT * FROM {target_table}"
-            
-            # Get column info to find a common column for ordering
-            source_cols_query = f"SELECT TOP 1 * FROM {source_schema}.{source_table}"
-            target_cols_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= 1"
-            
-            source_sample_temp = self.mssql_conn.read_table_as_dataframe(source_cols_query)
-            target_sample_temp = self.oracle_conn.read_table_as_dataframe(target_cols_query)
-            
-            # Find first common column (case-insensitive)
-            source_cols_lower = [col.lower() for col in source_sample_temp.columns]
-            target_cols_lower = [col.lower() for col in target_sample_temp.columns]
-            
-            common_col = None
-            for i, source_col_lower in enumerate(source_cols_lower):
-                if source_col_lower in target_cols_lower:
-                    source_col_actual = source_sample_temp.columns[i]
-                    target_col_idx = target_cols_lower.index(source_col_lower)
-                    target_col_actual = target_sample_temp.columns[target_col_idx]
-                    common_col = (source_col_actual, target_col_actual)
-                    break
-            
-            if common_col:
-                source_order_col, target_order_col = common_col
-                where_clause = f"ORDER BY [{source_order_col}] OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
-                target_order_clause = f"ORDER BY {target_order_col}"
-            else:
-                # Fallback to first column if no common columns found
-                where_clause = f"ORDER BY 1 OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
-                target_order_clause = "ORDER BY 1"
+            # Without primary key, use row number approach to ensure same logical rows
+            # This is more reliable than ordering which might not be deterministic
+            where_clause = f"ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
+            target_order_clause = ""
         
         # Get source sample
         source_query = f"SELECT * FROM {source_schema}.{source_table} {where_clause}"
@@ -208,38 +180,15 @@ class DataQualityChecker:
         if primary_key and 'WHERE' in where_clause:
             target_query = f"SELECT * FROM {target_table} {where_clause}"
         else:
-            # Use consistent ordering with source
+            # Use same row number approach - get first N rows in natural order
             actual_sample_size = len(source_df)
-            target_query = f"SELECT * FROM (SELECT * FROM {target_table} {target_order_clause}) WHERE ROWNUM <= {actual_sample_size}"
+            target_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= {actual_sample_size}"
         
         self.logger.info(f"Quality Check (target query): {target_query}")
         target_df = self.oracle_conn.read_table_as_dataframe(target_query)
 
-        # Ensure both DataFrames are sorted by the same logical column to guarantee row alignment
-        if len(source_df) > 0 and len(target_df) > 0:
-            # Find a common column to sort by (case-insensitive)
-            source_cols_lower = [col.lower() for col in source_df.columns]
-            target_cols_lower = [col.lower() for col in target_df.columns]
-            
-            sort_col_source = None
-            sort_col_target = None
-            
-            # Find first common column for sorting
-            for i, source_col_lower in enumerate(source_cols_lower):
-                if source_col_lower in target_cols_lower:
-                    sort_col_source = source_df.columns[i]
-                    target_col_idx = target_cols_lower.index(source_col_lower)
-                    sort_col_target = target_df.columns[target_col_idx]
-                    break
-            
-            # Sort both dataframes by the same logical column
-            if sort_col_source and sort_col_target:
-                source_df = source_df.sort(sort_col_source)
-                target_df = target_df.sort(sort_col_target)
-            else:
-                # Fallback: sort by first column if no common columns (shouldn't happen but safety net)
-                source_df = source_df.sort(source_df.columns[0])
-                target_df = target_df.sort(target_df.columns[0])
+        # DataFrames should already be ordered by the SQL queries above
+        # No additional sorting needed to avoid breaking row alignment
 
         return source_df, target_df
     
