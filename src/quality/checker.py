@@ -142,55 +142,89 @@ class DataQualityChecker:
     def get_random_sample(self, source_table: str, target_table: str, 
                          source_schema: str, sample_size: int, 
                          primary_key: Optional[str] = None) -> Tuple[pl.DataFrame, pl.DataFrame]:
-        """Get random sample from both source and target tables"""
+        """Get random sample from both source and target tables using hash-based matching"""
         
-        # If we have a primary key, use it for consistent sampling
-        if primary_key:
-            # Get all primary key values
-            pk_query_source = f"SELECT {primary_key} FROM {source_schema}.{source_table}"
-            pk_query_target = f"SELECT {primary_key} FROM {target_table}"
-            
-            source_pks = self.mssql_conn.execute_all(pk_query_source)
-            target_pks = self.oracle_conn.execute_all(pk_query_target)
-            
-            # Find common primary keys
-            source_pk_set = {str(row[0]) for row in source_pks}
-            target_pk_set = {str(row[0]) for row in target_pks}
-            common_pks = list(source_pk_set.intersection(target_pk_set))
-            
-            # Sample from common keys
-            sampled_pks = random.sample(common_pks, min(sample_size, len(common_pks)))
-            
-            # Build IN clause
-            pk_list = "', '".join(sampled_pks)
-            where_clause = f"WHERE {primary_key} IN ('{pk_list}')"
-            
-        else:
-            # Without primary key, use row number approach to ensure same logical rows
-            # This is more reliable than ordering which might not be deterministic
-            where_clause = f"ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH FIRST {sample_size} ROWS ONLY"
-            target_order_clause = ""
+        # New approach: Get full data from both tables, then match and sample
+        source_query = f"SELECT * FROM {source_schema}.{source_table}"
+        target_query = f"SELECT * FROM {target_table}"
         
-        # Get source sample
-        source_query = f"SELECT * FROM {source_schema}.{source_table} {where_clause}"
         self.logger.info(f"Quality Check (source query): {source_query}")
-        source_df = self.mssql_conn.read_table_as_dataframe(source_query)
-        
-        # For Oracle, use the same sampling approach to ensure we compare identical rows
-        if primary_key and 'WHERE' in where_clause:
-            target_query = f"SELECT * FROM {target_table} {where_clause}"
-        else:
-            # Use same row number approach - get first N rows in natural order
-            actual_sample_size = len(source_df)
-            target_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= {actual_sample_size}"
+        source_df_full = self.mssql_conn.read_table_as_dataframe(source_query)
         
         self.logger.info(f"Quality Check (target query): {target_query}")
-        target_df = self.oracle_conn.read_table_as_dataframe(target_query)
-
-        # DataFrames should already be ordered by the SQL queries above
-        # No additional sorting needed to avoid breaking row alignment
-
-        return source_df, target_df
+        target_df_full = self.oracle_conn.read_table_as_dataframe(target_query)
+        
+        if len(source_df_full) == 0 or len(target_df_full) == 0:
+            return source_df_full, target_df_full
+        
+        # Find common columns (case-insensitive)
+        source_cols_lower = {col.lower(): col for col in source_df_full.columns}
+        target_cols_lower = {col.lower(): col for col in target_df_full.columns}
+        common_cols_lower = set(source_cols_lower.keys()) & set(target_cols_lower.keys())
+        
+        if not common_cols_lower:
+            # No common columns, return empty
+            return pl.DataFrame(), pl.DataFrame()
+        
+        # Create row hashes for matching using first few common columns (max 3 for performance)
+        hash_cols = list(common_cols_lower)[:3]
+        
+        # Add row hash to source
+        source_hash_cols = [source_cols_lower[col] for col in hash_cols]
+        source_with_hash = source_df_full.with_columns([
+            pl.concat_str([
+                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                for col in source_hash_cols
+            ], separator="|").alias("_row_hash")
+        ])
+        
+        # Add row hash to target  
+        target_hash_cols = [target_cols_lower[col] for col in hash_cols]
+        target_with_hash = target_df_full.with_columns([
+            pl.concat_str([
+                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                for col in target_hash_cols
+            ], separator="|").alias("_row_hash")
+        ])
+        
+        # Find common hashes
+        source_hashes = set(source_with_hash["_row_hash"].to_list())
+        target_hashes = set(target_with_hash["_row_hash"].to_list())
+        common_hashes = list(source_hashes & target_hashes)
+        
+        if not common_hashes:
+            self.logger.warning("No matching rows found between source and target")
+            return pl.DataFrame(), pl.DataFrame()
+        
+        # Sample from common hashes
+        sample_hashes = random.sample(common_hashes, min(sample_size, len(common_hashes)))
+        
+        # Filter both dataframes to matching rows and remove hash column
+        source_sample = source_with_hash.filter(
+            pl.col("_row_hash").is_in(sample_hashes)
+        ).drop("_row_hash")
+        
+        target_sample = target_with_hash.filter(
+            pl.col("_row_hash").is_in(sample_hashes)
+        ).drop("_row_hash")
+        
+        # Sort both by hash to ensure same order (re-add hash temporarily for sorting)
+        source_sample = source_sample.with_columns([
+            pl.concat_str([
+                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                for col in source_hash_cols
+            ], separator="|").alias("_sort_hash")
+        ]).sort("_sort_hash").drop("_sort_hash")
+        
+        target_sample = target_sample.with_columns([
+            pl.concat_str([
+                pl.col(col).cast(pl.String).str.to_lowercase().fill_null("") 
+                for col in target_hash_cols
+            ], separator="|").alias("_sort_hash")
+        ]).sort("_sort_hash").drop("_sort_hash")
+        
+        self.logger.info(f"Sampled {len(source_sample)} matching rows for comparison")
+        return source_sample, target_sample
     
     def _apply_etl_transformations_to_dataframe(self, df: pl.DataFrame) -> pl.DataFrame:
         """Apply the same data transformations that are used during ETL process"""
@@ -406,9 +440,16 @@ class DataQualityChecker:
                     both_null = source_is_null & target_is_null
                     
                     # Case-insensitive comparison for non-null values
-                    source_lower = source_values.str.to_lowercase().fill_null("")
-                    target_lower = target_values.str.to_lowercase().fill_null("")
-                    both_equal = (source_lower == target_lower)
+                    try:
+                        # Convert to string first, then lowercase
+                        source_str = source_values.cast(pl.String)
+                        target_str = target_values.cast(pl.String)
+                        source_lower = source_str.str.to_lowercase().fill_null("")
+                        target_lower = target_str.str.to_lowercase().fill_null("")
+                        both_equal = (source_lower == target_lower)
+                    except Exception:
+                        # Fallback to direct comparison if string conversion fails
+                        both_equal = (source_values == target_values).fill_null(False)
                     
                     matches = (both_null | both_equal).sum()
                     total = len(source_values)
