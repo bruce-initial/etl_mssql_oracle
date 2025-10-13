@@ -139,48 +139,104 @@ class DataQualityChecker:
         
         return final_sample
     
-    def get_random_sample(self, source_table: str, target_table: str, 
-                         source_schema: str, sample_size: int, 
-                         primary_key: Optional[str] = None) -> Tuple[pl.DataFrame, pl.DataFrame]:
-        """Get sample from both source and target tables - simplified approach"""
-        
-        # Simple approach: get first N rows from both tables
-        source_query = f"SELECT TOP {sample_size} * FROM {source_schema}.{source_table}"
-        target_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= {sample_size}"
-        
-        self.logger.info(f"Quality Check (source query): {source_query}")
-        source_df = self.mssql_conn.read_table_as_dataframe(source_query)
-        
-        self.logger.info(f"Quality Check (target query): {target_query}")
-        target_df_full = self.oracle_conn.read_table_as_dataframe(target_query)
-        
-        if len(source_df) == 0 or len(target_df_full) == 0:
-            return source_df, target_df_full
-        
-        # Find common columns (MSSQL mixed case -> Oracle uppercase)
-        source_cols_map = {col.upper(): col for col in source_df.columns}
-        target_cols_map = {col: col for col in target_df_full.columns}
-        common_cols_upper = set(source_cols_map.keys()) & set(target_cols_map.keys())
-        
-        if not common_cols_upper:
-            return pl.DataFrame(), pl.DataFrame()
-        
-        # Filter target to only include common columns (exclude additional columns)
-        target_columns_to_keep = [target_cols_map[col] for col in common_cols_upper]
-        target_df = target_df_full.select(target_columns_to_keep)
-        
-        # Ensure both have same number of rows
-        min_rows = min(len(source_df), len(target_df))
-        source_sample = source_df[:min_rows]
-        target_sample = target_df[:min_rows]
-        
-        self.logger.info(f"Sampled {len(source_sample)} rows for comparison")
-        self.logger.info(f"Source columns: {source_sample.columns}")
-        self.logger.info(f"Target columns: {target_sample.columns}")
-        return source_sample, target_sample
+    def get_expected_additional_columns(self) -> List[str]:
+        """Get list of expected additional columns that are added during ETL"""
+        return [
+            'U_ID',  # UUID column added by ETL process
+            # Add other known additional columns here
+        ]
+    
+    def is_sanitized_column_name(self, original_col: str, target_col: str) -> bool:
+        """Check if target column is a sanitized version of source column"""
+        # Apply same sanitization logic as DataTypeMapper
+        import re
+        sanitized = re.sub(r'[^\w]', '_', original_col.strip()).upper()
+        if sanitized[0].isdigit():
+            sanitized = f"COL_{sanitized}"
+        return target_col == sanitized
+    
+    def get_column_statistics(self, table_name: str, column_name: str, 
+                            schema: str = None, is_oracle: bool = False) -> Dict[str, Any]:
+        """Get statistical aggregates for a column"""
+        try:
+            # Build query based on database type
+            if is_oracle:
+                base_query = f"SELECT * FROM {table_name}"
+                conn = self.oracle_conn
+            else:
+                base_query = f"SELECT * FROM {schema}.{table_name}" if schema else f"SELECT * FROM {table_name}"
+                conn = self.mssql_conn
+            
+            # Read data as dataframe for statistical analysis
+            df = conn.read_table_as_dataframe(base_query)
+            
+            if column_name not in df.columns or len(df) == 0:
+                return {
+                    'count': 0,
+                    'non_null_count': 0,
+                    'null_count': 0,
+                    'distinct_count': 0,
+                    'min_value': None,
+                    'max_value': None,
+                    'avg_length': None
+                }
+            
+            col_data = df[column_name]
+            
+            # Basic counts
+            total_count = len(col_data)
+            null_count = col_data.null_count()
+            non_null_count = total_count - null_count
+            
+            # Get distinct count
+            try:
+                distinct_count = col_data.n_unique()
+            except Exception:
+                distinct_count = None
+            
+            # Get min/max values (convert to string for comparison)
+            min_value = None
+            max_value = None
+            avg_length = None
+            
+            if non_null_count > 0:
+                try:
+                    # Convert to string for consistent comparison
+                    string_col = col_data.cast(pl.String)
+                    non_null_strings = string_col.drop_nulls()
+                    
+                    if len(non_null_strings) > 0:
+                        min_value = non_null_strings.min()
+                        max_value = non_null_strings.max()
+                        avg_length = non_null_strings.str.len_chars().mean()
+                except Exception as e:
+                    self.logger.debug(f"Error calculating min/max for {column_name}: {e}")
+            
+            return {
+                'count': total_count,
+                'non_null_count': non_null_count,
+                'null_count': null_count,
+                'distinct_count': distinct_count,
+                'min_value': min_value,
+                'max_value': max_value,
+                'avg_length': avg_length
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting statistics for {column_name}: {e}")
+            return {
+                'count': 0,
+                'non_null_count': 0,
+                'null_count': 0,
+                'distinct_count': 0,
+                'min_value': None,
+                'max_value': None,
+                'avg_length': None,
+                'error': str(e)
+            }
     
     def _apply_etl_transformations_to_dataframe(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Apply the same data transformations that are used during ETL process"""
+        """Apply the same data transformations that are used during ETL process - DEPRECATED: Use statistical comparison instead"""
         
         # Convert all columns to string first
         string_df = df.with_columns([
@@ -258,9 +314,166 @@ class DataQualityChecker:
         query = f"SELECT COUNT(*) FROM {schema}.{table_name}"
         return self.mssql_conn.execute_scalar(query)
     
+    def compare_column_statistics(self, source_table: str, target_table: str,
+                                source_schema: str = 'dbo') -> Dict[str, Any]:
+        """Compare statistical aggregates between source and target columns"""
+        
+        try:
+            # Get column lists from both tables
+            source_query = f"SELECT TOP 1 * FROM {source_schema}.{source_table}"
+            source_df = self.mssql_conn.read_table_as_dataframe(source_query)
+            
+            target_query = f"SELECT * FROM {target_table} WHERE ROWNUM <= 1"
+            target_df = self.oracle_conn.read_table_as_dataframe(target_query)
+            
+            if len(source_df.columns) == 0 or len(target_df.columns) == 0:
+                return {
+                    'columns_checked': 0,
+                    'columns_matched': 0,
+                    'match_percentage': 0.0,
+                    'details': 'No columns to compare',
+                    'mismatch_details': []
+                }
+            
+            # Map source columns to target columns
+            source_cols_map = {col.upper(): col for col in source_df.columns}
+            target_cols_map = {col: col for col in target_df.columns}
+            
+            # Find expected additional columns
+            expected_additional = set(self.get_expected_additional_columns())
+            
+            # Find actual additional columns (excluding expected ones)
+            target_only_cols = set(target_cols_map.keys()) - set(source_cols_map.keys())
+            unexpected_additional = target_only_cols - expected_additional
+            
+            # Find common columns for comparison
+            common_cols_upper = set(source_cols_map.keys()) & set(target_cols_map.keys())
+            missing_columns = list(set(source_cols_map.keys()) - set(target_cols_map.keys()))
+            
+            mismatch_details = []
+            
+            if unexpected_additional:
+                unexpected_list = [target_cols_map[col] for col in unexpected_additional]
+                mismatch_details.append(f"Unexpected additional columns: {', '.join(unexpected_list)}")
+            
+            if missing_columns:
+                missing_list = [source_cols_map[col] for col in missing_columns]
+                mismatch_details.append(f"Missing columns in target: {', '.join(missing_list)}")
+            
+            if not common_cols_upper:
+                return {
+                    'columns_checked': 0,
+                    'columns_matched': 0,
+                    'match_percentage': 0.0,
+                    'total_source_columns': len(source_cols_map),
+                    'missing_columns': missing_columns,
+                    'unexpected_additional_columns': list(unexpected_additional),
+                    'details': 'No common columns found',
+                    'mismatch_details': mismatch_details
+                }
+            
+            columns_checked = len(common_cols_upper)
+            columns_matched = 0
+            column_details = {}
+            
+            # Compare statistics for each common column
+            for col_upper in common_cols_upper:
+                source_col = source_cols_map[col_upper]
+                target_col = target_cols_map[col_upper]
+                
+                try:
+                    # Get statistics from both tables
+                    source_stats = self.get_column_statistics(source_table, source_col, source_schema, False)
+                    target_stats = self.get_column_statistics(target_table, target_col, None, True)
+                    
+                    # Compare key statistics
+                    stats_match = True
+                    stat_mismatches = []
+                    
+                    # Check row counts
+                    if source_stats['count'] != target_stats['count']:
+                        stats_match = False
+                        stat_mismatches.append(f"count: {source_stats['count']} vs {target_stats['count']}")
+                    
+                    # Check null counts
+                    if source_stats['null_count'] != target_stats['null_count']:
+                        stats_match = False
+                        stat_mismatches.append(f"null_count: {source_stats['null_count']} vs {target_stats['null_count']}")
+                    
+                    # Check distinct counts (with tolerance for small differences)
+                    source_distinct = source_stats['distinct_count']
+                    target_distinct = target_stats['distinct_count']
+                    if source_distinct is not None and target_distinct is not None:
+                        if abs(source_distinct - target_distinct) > max(1, source_distinct * 0.01):  # 1% tolerance
+                            stats_match = False
+                            stat_mismatches.append(f"distinct_count: {source_distinct} vs {target_distinct}")
+                    
+                    # Check min/max values (case-insensitive string comparison)
+                    if source_stats['min_value'] is not None and target_stats['min_value'] is not None:
+                        if str(source_stats['min_value']).lower() != str(target_stats['min_value']).lower():
+                            stats_match = False
+                            stat_mismatches.append(f"min_value: '{source_stats['min_value']}' vs '{target_stats['min_value']}'")
+                    
+                    if source_stats['max_value'] is not None and target_stats['max_value'] is not None:
+                        if str(source_stats['max_value']).lower() != str(target_stats['max_value']).lower():
+                            stats_match = False
+                            stat_mismatches.append(f"max_value: '{source_stats['max_value']}' vs '{target_stats['max_value']}'")
+                    
+                    if stats_match:
+                        columns_matched += 1
+                    else:
+                        detailed_info = f"Column '{source_col}': {'; '.join(stat_mismatches)}"
+                        mismatch_details.append(detailed_info)
+                    
+                    column_details[source_col] = {
+                        'source_stats': source_stats,
+                        'target_stats': target_stats,
+                        'stats_match': stats_match,
+                        'mismatches': stat_mismatches
+                    }
+                    
+                except Exception as e:
+                    self.logger.warning(f"Error comparing statistics for column {source_col}: {e}")
+                    mismatch_details.append(f"Column '{source_col}': Statistics comparison error - {str(e)}")
+                    column_details[source_col] = {
+                        'stats_match': False,
+                        'error': str(e)
+                    }
+            
+            # Calculate match percentage
+            total_source_columns = len(source_cols_map)
+            if total_source_columns > 0:
+                match_percentage = (columns_matched / total_source_columns * 100)
+            else:
+                match_percentage = 0.0
+            
+            return {
+                'columns_checked': columns_checked,
+                'columns_matched': columns_matched,
+                'match_percentage': match_percentage,
+                'total_source_columns': total_source_columns,
+                'missing_columns': missing_columns,
+                'unexpected_additional_columns': list(unexpected_additional),
+                'column_details': column_details,
+                'mismatch_details': mismatch_details
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in statistical comparison: {e}")
+            return {
+                'columns_checked': 0,
+                'columns_matched': 0,
+                'match_percentage': 0.0,
+                'total_source_columns': 0,
+                'missing_columns': [],
+                'unexpected_additional_columns': [],
+                'details': f'Statistical comparison failed: {e}',
+                'mismatch_details': [f'Error: {e}']
+            }
+    
     def compare_dataframe_content(self, source_df: pl.DataFrame, 
                                  target_df: pl.DataFrame) -> Dict[str, Any]:
-        """Compare content between source and target dataframes"""
+        """Compare content between source and target dataframes - DEPRECATED: Use compare_column_statistics instead"""
         
         if len(source_df) == 0 or len(target_df) == 0:
             return {
@@ -432,13 +645,12 @@ class DataQualityChecker:
     def check_content_comparison(self, source_table: str, target_table: str,
                                source_schema: str = 'dbo', source_count: int = 0,
                                primary_key: Optional[str] = None) -> Dict[str, Any]:
-        """Compare sample content between source and target tables"""
+        """Compare statistical aggregates between source and target tables (improved approach)"""
         start_time = time.time()
         
         try:
-            # Determine sample size
+            # Get actual count if not provided
             actual_count = source_count if source_count > 0 else self.get_table_count(source_table, source_schema)
-            sample_size = self.determine_sample_size(actual_count)
             
             if actual_count == 0:
                 return {
@@ -452,46 +664,31 @@ class DataQualityChecker:
                     'error_message': 'No data to compare',
                     'duration': time.time() - start_time,
                     'missing_columns': [],
-                    'additional_columns': []
+                    'unexpected_additional_columns': []
                 }
             
-            # Get random samples
-            source_df, target_df = self.get_random_sample(
-                source_table, target_table, source_schema, sample_size, primary_key
-            )
+            # Use statistical comparison instead of row-by-row sampling
+            comparison_result = self.compare_column_statistics(source_table, target_table, source_schema)
             
-            # Convert both dataframes to all strings to ensure schema consistency
-            # Apply the same data transformations to source data that are applied during ETL
-            source_df = self._apply_etl_transformations_to_dataframe(source_df)
-            target_df = target_df.with_columns([
-                pl.col(col).cast(pl.String) for col in target_df.columns
-            ])
-            
-            # Compare content
-            comparison_result = self.compare_dataframe_content(source_df, target_df)
-            
-            # Determine overall status and build detailed error message
+            # Extract results
             match_percentage = comparison_result['match_percentage']
             mismatch_details = comparison_result.get('mismatch_details', [])
             missing_columns = comparison_result.get('missing_columns', [])
-            additional_columns = comparison_result.get('additional_columns', [])
+            unexpected_additional = comparison_result.get('unexpected_additional_columns', [])
             
-            # Build comprehensive error message that includes missing/additional columns
+            # Build comprehensive error message
             error_parts = []
             
             # Always include missing columns if any exist
             if missing_columns:
                 error_parts.append(f"Missing columns in target: {', '.join(missing_columns)}")
             
-            # Include additional columns if any exist
-            if additional_columns:
-                error_parts.append(f"Additional columns in target: {', '.join(additional_columns)}")
+            # Include unexpected additional columns (excluding expected ones like U_ID)
+            if unexpected_additional:
+                error_parts.append(f"Unexpected additional columns: {', '.join(unexpected_additional)}")
             
-            # Include other mismatch details (excluding missing/additional column details to avoid duplication)
-            other_details = [detail for detail in mismatch_details 
-                           if not detail.startswith('Missing columns in target:') 
-                           and not detail.startswith('Additional columns in target:')]
-            error_parts.extend(other_details)
+            # Include statistical mismatch details
+            error_parts.extend(mismatch_details)
             
             # Determine status based on match percentage and missing columns
             if match_percentage >= 95 and not missing_columns:
@@ -499,25 +696,24 @@ class DataQualityChecker:
                 error_message = ' | '.join(error_parts) if error_parts else None
             elif match_percentage >= 80 and not missing_columns:
                 status = 'WARNING'
-                error_message = f"Content match below threshold: {match_percentage:.1f}%"
+                error_message = f"Statistical match below threshold: {match_percentage:.1f}%"
                 if error_parts:
                     error_message += f" | {' | '.join(error_parts)}"
             else:
                 status = 'FAILED'
                 if missing_columns:
-                    error_message = f"Missing columns detected. Content match: {match_percentage:.1f}%"
+                    error_message = f"Missing columns detected. Statistical match: {match_percentage:.1f}%"
                 else:
-                    error_message = f"Poor content match: {match_percentage:.1f}%"
+                    error_message = f"Poor statistical match: {match_percentage:.1f}%"
                 if error_parts:
                     error_message += f" | {' | '.join(error_parts)}"
             
             duration = time.time() - start_time
-            actual_sample_percentage = (len(source_df) / actual_count) if actual_count > 0 else 0
             
             result = {
                 'check_type': 'CONTENT_COMPARISON',
-                'sample_size': len(source_df),
-                'sample_percentage': actual_sample_percentage,
+                'sample_size': actual_count,  # Full table statistical analysis
+                'sample_percentage': 1.0,  # 100% statistical coverage
                 'columns_checked': comparison_result['columns_checked'],
                 'columns_matched': comparison_result['columns_matched'],
                 'match_percentage': match_percentage,
@@ -525,10 +721,11 @@ class DataQualityChecker:
                 'error_message': error_message,
                 'duration': duration,
                 'details': comparison_result.get('column_details', {}),
-                'mismatch_details': mismatch_details
+                'mismatch_details': mismatch_details,
+                'analysis_method': 'statistical_aggregates'
             }
             
-            self.logger.info(f"Content comparison - {source_table}: sampled={len(source_df)}, "
+            self.logger.info(f"Statistical comparison - {source_table}: "
                            f"columns_checked={comparison_result['columns_checked']}, "
                            f"match_rate={match_percentage:.1f}%")
             
@@ -536,7 +733,7 @@ class DataQualityChecker:
             
         except Exception as e:
             duration = time.time() - start_time
-            error_msg = f"Content comparison failed: {e}"
+            error_msg = f"Statistical comparison failed: {e}"
             self.logger.error(error_msg)
             
             return {
@@ -550,7 +747,8 @@ class DataQualityChecker:
                 'error_message': error_msg,
                 'duration': duration,
                 'missing_columns': [],
-                'additional_columns': []
+                'unexpected_additional_columns': [],
+                'analysis_method': 'statistical_aggregates'
             }
     
     def record_check_result(self, source_table: str, target_table: str, 
