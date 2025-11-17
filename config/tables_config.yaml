@@ -185,7 +185,7 @@ tables:
 
 ################################################################################# 10
   - source_table: "LandCrtlCase"
-    target_table: "TEST_RLCIS_LANDCRTLCASE"
+    target_table: "TEST_RLCIS_LANDCRTLCASE_OLD"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 5000
@@ -755,6 +755,116 @@ tables:
 
   - source_table: "CtrlSite"
     target_table: "TEST_RLCIS_CTRLSITE"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+  - source_table: "GeneralCodeMaster"
+    target_table: "TEST_RLCIS_GENERALCODEMASTER"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+  - source_table: "Workflow"
+    target_table: "TEST_RLCIS_WORKFLOW"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+  - source_table: "LandCrtlReply"
+    target_table: "TEST_RLCIS_LANDCRTLREPLY"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+
+################################################################################# 45
+  - source_table: "StrucType"
+    target_table: "TEST_RLCIS_STRUCTYPE"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+  - source_table: "vLCIS_Active_Case"
+    target_table: "TEST_RLCIS_LANDCRTLCASE"
+    source_schema: "dbo"
+    custom_query: ""  # Use default query, or specify custom SQL file
+    batch_size: 5000
+
+    # Primary key definition
+    primary_key:
+
+    # Indexes to create
+    indexes:
+      - name:
+        columns: []
+        unique: false
+
+    # No foreign keys for parent table
+    foreign_keys: []
+
+  - source_table: "vLCIS_Completed_Case"
+    target_table: "TEST_RLCIS_LANDCRTLCASE_COMPLETED"
     source_schema: "dbo"
     custom_query: ""  # Use default query, or specify custom SQL file
     batch_size: 5000

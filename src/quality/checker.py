@@ -155,9 +155,69 @@ class DataQualityChecker:
             sanitized = f"COL_{sanitized}"
         return target_col == sanitized
     
+    def normalize_single_boolean_value(self, value: str) -> str:
+        """Normalize a single boolean value to '0' or '1'"""
+        if value is None:
+            return None
+        
+        val_str = str(value).lower().strip()
+        if val_str in ['true', '1', 'yes', 't', 'y']:
+            return '1'
+        elif val_str in ['false', '0', 'no', 'f', 'n']:
+            return '0'
+        else:
+            return val_str  # Return as-is if not boolean-like
+    
+    def normalize_boolean_values(self, col_data: pl.Series) -> pl.Series:
+        """Normalize boolean values to match ETL transformation (true/false -> '1'/'0')"""
+        try:
+            # Check if column contains boolean-like values
+            string_col = col_data.cast(pl.String)
+            
+            # Apply boolean normalization similar to DataTypeMapper.process_data_for_oracle
+            normalized = string_col.map_elements(
+                lambda x: (
+                    '1' if x is not None and (
+                        (isinstance(x, bool) and x) or 
+                        (isinstance(x, str) and x.lower() in ['true', '1', 'yes', 't', 'y']) or
+                        (str(x).lower() in ['true', '1', 'yes', 't', 'y'])
+                    ) else (
+                        '0' if x is not None and (
+                            (isinstance(x, bool) and not x) or 
+                            (isinstance(x, str) and x.lower() in ['false', '0', 'no', 'f', 'n']) or
+                            (str(x).lower() in ['false', '0', 'no', 'f', 'n'])
+                        ) else str(x) if x is not None else None
+                    )
+                ),
+                return_dtype=pl.String
+            )
+            
+            return normalized
+        except Exception as e:
+            self.logger.debug(f"Error normalizing boolean values: {e}")
+            return col_data.cast(pl.String)
+    
+    def is_boolean_like_column(self, col_data: pl.Series) -> bool:
+        """Check if column contains boolean-like values"""
+        try:
+            # Get non-null unique values
+            unique_values = col_data.drop_nulls().unique().to_list()
+            if not unique_values:
+                return False
+            
+            # Convert to lowercase strings for comparison
+            unique_strs = [str(v).lower().strip() for v in unique_values if v is not None]
+            
+            # Check if all values are boolean-like
+            boolean_values = {'true', 'false', '1', '0', 'yes', 'no', 't', 'f', 'y', 'n'}
+            return len(unique_strs) <= 10 and all(s in boolean_values for s in unique_strs if s)
+            
+        except Exception:
+            return False
+    
     def get_column_statistics(self, table_name: str, column_name: str, 
                             schema: str = None, is_oracle: bool = False) -> Dict[str, Any]:
-        """Get statistical aggregates for a column"""
+        """Get statistical aggregates for a column with boolean normalization"""
         try:
             # Build query based on database type
             if is_oracle:
@@ -178,10 +238,22 @@ class DataQualityChecker:
                     'distinct_count': 0,
                     'min_value': None,
                     'max_value': None,
-                    'avg_length': None
+                    'avg_length': None,
+                    'is_boolean_like': False
                 }
             
             col_data = df[column_name]
+            
+            # Check if this is a boolean-like column
+            is_boolean_like = self.is_boolean_like_column(col_data)
+            
+            # Apply boolean normalization if needed (especially for MSSQL source)
+            if is_boolean_like and not is_oracle:
+                # For MSSQL source, normalize boolean values to match Oracle target
+                self.logger.debug(f"Applying boolean normalization to MSSQL column {column_name}")
+                col_data = self.normalize_boolean_values(col_data)
+            elif is_boolean_like and is_oracle:
+                self.logger.debug(f"Detected boolean-like Oracle column {column_name} (already normalized)")
             
             # Basic counts
             total_count = len(col_data)
@@ -219,7 +291,8 @@ class DataQualityChecker:
                 'distinct_count': distinct_count,
                 'min_value': min_value,
                 'max_value': max_value,
-                'avg_length': avg_length
+                'avg_length': avg_length,
+                'is_boolean_like': is_boolean_like
             }
             
         except Exception as e:
@@ -262,9 +335,17 @@ class DataQualityChecker:
                 elif str(val).lower() in ['null', '<null>']:
                     processed_row.append(None)
                 elif isinstance(val, bool):
+                    # Convert boolean to '1'/'0' strings to match Oracle target
                     processed_row.append('1' if val else '0')
-                elif str(val).lower() in ['true', 'false']:
-                    processed_row.append('1' if str(val).lower() == 'true' else '0')
+                elif str(val).lower() in ['true', 'false', 'yes', 'no', 't', 'f', 'y', 'n']:
+                    # Handle string representations of boolean values (expanded list)
+                    val_str = str(val).lower().strip()
+                    if val_str in ['true', '1', 'yes', 't', 'y']:
+                        processed_row.append('1')
+                    elif val_str in ['false', '0', 'no', 'f', 'n']:
+                        processed_row.append('0')
+                    else:
+                        processed_row.append(str(val))
                 else:
                     # For string values, apply the same transformations as ETL
                     if isinstance(val, bytes):
@@ -408,16 +489,45 @@ class DataQualityChecker:
                             stats_match = False
                             stat_mismatches.append(f"distinct_count: {source_distinct} vs {target_distinct}")
                     
-                    # Check min/max values (case-insensitive string comparison)
+                    # Check min/max values with special handling for boolean columns
+                    source_is_bool = source_stats.get('is_boolean_like', False)
+                    target_is_bool = target_stats.get('is_boolean_like', False)
+                    
                     if source_stats['min_value'] is not None and target_stats['min_value'] is not None:
-                        if str(source_stats['min_value']).lower() != str(target_stats['min_value']).lower():
-                            stats_match = False
-                            stat_mismatches.append(f"min_value: '{source_stats['min_value']}' vs '{target_stats['min_value']}'")
+                        source_min = str(source_stats['min_value'])
+                        target_min = str(target_stats['min_value'])
+                        
+                        # For boolean columns, normalize before comparison
+                        if source_is_bool or target_is_bool:
+                            source_min_norm = self.normalize_single_boolean_value(source_min)
+                            target_min_norm = self.normalize_single_boolean_value(target_min)
+                            if source_min_norm != target_min_norm:
+                                stats_match = False
+                                self.logger.debug(f"Boolean min_value mismatch in column {source_col}: source='{source_min}' -> '{source_min_norm}', target='{target_min}' -> '{target_min_norm}'")
+                                stat_mismatches.append(f"min_value: '{source_stats['min_value']}' vs '{target_stats['min_value']}' (boolean normalized: '{source_min_norm}' vs '{target_min_norm}')")
+                        else:
+                            # Case-insensitive comparison for non-boolean columns
+                            if source_min.lower() != target_min.lower():
+                                stats_match = False
+                                stat_mismatches.append(f"min_value: '{source_stats['min_value']}' vs '{target_stats['min_value']}'")
                     
                     if source_stats['max_value'] is not None and target_stats['max_value'] is not None:
-                        if str(source_stats['max_value']).lower() != str(target_stats['max_value']).lower():
-                            stats_match = False
-                            stat_mismatches.append(f"max_value: '{source_stats['max_value']}' vs '{target_stats['max_value']}'")
+                        source_max = str(source_stats['max_value'])
+                        target_max = str(target_stats['max_value'])
+                        
+                        # For boolean columns, normalize before comparison
+                        if source_is_bool or target_is_bool:
+                            source_max_norm = self.normalize_single_boolean_value(source_max)
+                            target_max_norm = self.normalize_single_boolean_value(target_max)
+                            if source_max_norm != target_max_norm:
+                                stats_match = False
+                                self.logger.debug(f"Boolean max_value mismatch in column {source_col}: source='{source_max}' -> '{source_max_norm}', target='{target_max}' -> '{target_max_norm}'")
+                                stat_mismatches.append(f"max_value: '{source_stats['max_value']}' vs '{target_stats['max_value']}' (boolean normalized: '{source_max_norm}' vs '{target_max_norm}')")
+                        else:
+                            # Case-insensitive comparison for non-boolean columns
+                            if source_max.lower() != target_max.lower():
+                                stats_match = False
+                                stat_mismatches.append(f"max_value: '{source_stats['max_value']}' vs '{target_stats['max_value']}'")
                     
                     if stats_match:
                         columns_matched += 1
@@ -556,16 +666,28 @@ class DataQualityChecker:
                     target_is_null = target_values.is_null()
                     both_null = source_is_null & target_is_null
                     
-                    # Case-insensitive comparison for non-null values
+                    # Enhanced comparison with boolean normalization for non-null values
                     try:
-                        # Convert to string first, then lowercase
+                        # Convert to string first
                         source_str = source_values.cast(pl.String)
                         target_str = target_values.cast(pl.String)
-                        source_lower = source_str.str.to_lowercase().fill_null("")
-                        target_lower = target_str.str.to_lowercase().fill_null("")
-                        both_equal = (source_lower == target_lower)
+                        
+                        # Check if this might be a boolean column
+                        is_bool_like = self.is_boolean_like_column(source_values) or self.is_boolean_like_column(target_values)
+                        
+                        if is_bool_like:
+                            # Apply boolean normalization to both columns
+                            self.logger.debug(f"Applying boolean normalization for column comparison: {source_col}")
+                            source_normalized = self.normalize_boolean_values(source_values)
+                            target_normalized = self.normalize_boolean_values(target_values)
+                            both_equal = (source_normalized == target_normalized)
+                        else:
+                            # Standard case-insensitive comparison
+                            source_lower = source_str.str.to_lowercase().fill_null("")
+                            target_lower = target_str.str.to_lowercase().fill_null("")
+                            both_equal = (source_lower == target_lower)
                     except Exception:
-                        # Fallback to direct comparison if string conversion fails
+                        # Fallback to direct comparison if normalization fails
                         both_equal = (source_values == target_values).fill_null(False)
                     
                     matches = (both_null | both_equal).sum()
